@@ -1,27 +1,33 @@
-import os
-import json
+import time
 
-BASE = "history"
-
-
-def get_path(user, chat_id):
-    path = os.path.join(BASE, user)
-    os.makedirs(path, exist_ok=True)
-    return os.path.join(path, f"{chat_id}.json")
+from backend.db import connect, decode, encode, init_db
 
 
 def load_history(user, chat_id):
-    path = get_path(user, chat_id)
+    init_db()
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT history_json
+            FROM chat_history
+            WHERE user = ? AND chat_id = ?
+            """,
+            (user, chat_id),
+        ).fetchone()
 
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-
-    return []
+    return decode(row["history_json"], []) if row else []
 
 
 def save_history(user, chat_id, history):
-    path = get_path(user, chat_id)
-
-    with open(path, "w") as f:
-        json.dump(history, f, indent=4)
+    init_db()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO chat_history (user, chat_id, history_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user, chat_id) DO UPDATE SET
+                history_json = excluded.history_json,
+                updated_at = excluded.updated_at
+            """,
+            (user, chat_id, encode(history), time.time()),
+        )

@@ -1,27 +1,39 @@
 import time
-import json
-import os
 
-LOG_FILE = "logs.json"
+from backend.db import connect, decode, encode, init_db
+
 
 def log_event(event_type, data):
+    init_db()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO events (type, time, data_json)
+            VALUES (?, ?, ?)
+            """,
+            (event_type, time.time(), encode(data)),
+        )
 
-    entry = {
-        "type": event_type,
-        "time": time.time(),
-        "data": data
-    }
 
-    if not os.path.exists(LOG_FILE):
-        logs = []
-    else:
-        with open(LOG_FILE, "r") as f:
-            try:
-                logs = json.load(f)
-            except:
-                logs = []
+def load_events(event_type=None):
+    init_db()
+    query = "SELECT type, time, data_json FROM events"
+    params = []
 
-    logs.append(entry)
+    if event_type:
+        query += " WHERE type = ?"
+        params.append(event_type)
 
-    with open(LOG_FILE, "w") as f:
-        json.dump(logs, f, indent=2)
+    query += " ORDER BY time ASC"
+
+    with connect() as conn:
+        rows = conn.execute(query, params).fetchall()
+
+    return [
+        {
+            "type": row["type"],
+            "time": row["time"],
+            "data": decode(row["data_json"], {}),
+        }
+        for row in rows
+    ]

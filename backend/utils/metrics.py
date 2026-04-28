@@ -1,9 +1,8 @@
-import json
-import os
 import time
 
+from backend.db import get_state, set_state
 
-FILE = "metrics.json"
+
 GROQ_LLAMA_3_1_8B_INPUT_PER_1M = 0.05
 GROQ_LLAMA_3_1_8B_OUTPUT_PER_1M = 0.08
 
@@ -18,6 +17,7 @@ DEFAULT_METRICS = {
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "total_tokens": 0,
+    "summary_tokens": 0,
     "estimated_cost_usd": 0.0,
     "model_calls": {},
     "retrieval": {
@@ -48,22 +48,12 @@ def _merge_defaults(data, defaults):
 
 
 def load():
-    if not os.path.exists(FILE):
-        return DEFAULT_METRICS.copy()
-
-    try:
-        with open(FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return DEFAULT_METRICS.copy()
-
-    return _merge_defaults(data, DEFAULT_METRICS)
+    return _merge_defaults(get_state("metrics", {}) or {}, DEFAULT_METRICS)
 
 
 def save(data):
     data["updated_at"] = time.time()
-    with open(FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    set_state("metrics", data)
 
 
 def estimate_cost(prompt_tokens=0, completion_tokens=0):
@@ -99,10 +89,12 @@ def log_query(stats=None):
     prompt_tokens = int(stats.get("prompt_tokens", 0) or 0)
     completion_tokens = int(stats.get("completion_tokens", 0) or 0)
     total_tokens = int(stats.get("total_tokens", prompt_tokens + completion_tokens) or 0)
+    summary_tokens = int(stats.get("summary_total_tokens", 0) or 0)
 
     data["prompt_tokens"] += prompt_tokens
     data["completion_tokens"] += completion_tokens
     data["total_tokens"] += total_tokens
+    data["summary_tokens"] += summary_tokens
     data["estimated_cost_usd"] = round(
         float(data.get("estimated_cost_usd", 0.0))
         + estimate_cost(prompt_tokens, completion_tokens),
@@ -144,6 +136,7 @@ def log_query(stats=None):
         "retrieved_chunks": stats.get("retrieved_chunks", 0),
         "latency_ms": round(latency_ms, 2),
         "total_tokens": total_tokens,
+        "summary_tokens": summary_tokens,
         "model": model,
         "time": time.time(),
     }

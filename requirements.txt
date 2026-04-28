@@ -17,3 +17,8 @@ pytesseract
 Pillow
 streamlit
 groq
+jinja2
+openpyxl
+xlrd
+redis
+rapidocr-onnxruntime

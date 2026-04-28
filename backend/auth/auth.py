@@ -1,55 +1,71 @@
-import json
-import os
 from datetime import datetime, timedelta
-from jose import jwt, JWTError
+
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from backend.config.settings import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.config.settings import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+from backend.db import connect, init_db
 
-# 🔥 absolute path (no file issues)
-DB_FILE = os.path.join(os.getcwd(), "users.json")
 
-# 🔥 FIXED hashing (no bcrypt issues)
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+fake_users_db = {}
 
-# -------------------------------
-# LOAD USERS
-# -------------------------------
-if os.path.exists(DB_FILE):
-    try:
-        with open(DB_FILE, "r") as f:
-            fake_users_db = json.load(f)
-    except:
-        fake_users_db = {}
-else:
-    fake_users_db = {}
 
-# -------------------------------
-# SAVE USERS
-# -------------------------------
+def load_users():
+    init_db()
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT username, password, role FROM users ORDER BY username"
+        ).fetchall()
+
+    return {
+        row["username"]: {
+            "username": row["username"],
+            "password": row["password"],
+            "role": row["role"],
+        }
+        for row in rows
+    }
+
+
+def refresh_users():
+    fake_users_db.clear()
+    fake_users_db.update(load_users())
+
+
 def save_users():
-    with open(DB_FILE, "w") as f:
-        json.dump(fake_users_db, f, indent=4)
+    init_db()
+    with connect() as conn:
+        conn.execute("DELETE FROM users")
+        for username, user in fake_users_db.items():
+            conn.execute(
+                """
+                INSERT INTO users (username, password, role)
+                VALUES (?, ?, ?)
+                """,
+                (username, user["password"], user["role"]),
+            )
 
-# -------------------------------
-# PASSWORD
-# -------------------------------
+
 def hash_password(password: str):
     return pwd_context.hash(password)
+
 
 def verify_password(plain: str, hashed: str):
     return pwd_context.verify(plain, hashed)
 
-# -------------------------------
-# TOKEN
-# -------------------------------
+
 def create_token(data: dict):
     to_encode = data.copy()
     to_encode["exp"] = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def decode_token(token: str):
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+
+refresh_users()

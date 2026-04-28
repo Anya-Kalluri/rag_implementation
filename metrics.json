@@ -1,48 +1,43 @@
 {
-  "uploads": 33,
-  "queries": 63,
-  "errors": 1,
-  "total_latency_ms": 31347.625732421875,
-  "avg_latency_ms": 497.58,
-  "last_latency_ms": 27.02,
-  "prompt_tokens": 9325,
-  "completion_tokens": 642,
-  "total_tokens": 9967,
-  "estimated_cost_usd": 0.00051761,
+  "uploads": 3,
+  "queries": 7,
+  "errors": 0,
+  "total_latency_ms": 31341.00604057312,
+  "avg_latency_ms": 4477.29,
+  "last_latency_ms": 19099.78,
+  "prompt_tokens": 19878,
+  "completion_tokens": 877,
+  "total_tokens": 20755,
+  "estimated_cost_usd": 0.00106406,
   "model_calls": {
-    "llama-3.1-8b-instant": 10
+    "llama-3.1-8b-instant": 7
   },
   "retrieval": {
-    "evaluated_queries": 10,
-    "avg_precision_at_k": 0.6,
-    "avg_recall_proxy": 0.2524,
-    "avg_response_relevance": 0.3266,
+    "evaluated_queries": 7,
+    "avg_precision_at_k": 0.8143,
+    "avg_recall_proxy": 0.527,
+    "avg_response_relevance": 0.3714,
     "last_precision_at_k": 1.0,
-    "last_recall_proxy": 0.5,
-    "last_response_relevance": 0.0
+    "last_recall_proxy": 0.5556,
+    "last_response_relevance": 0.6667
   },
   "last_query": {
-    "user": "anya",
-    "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
-    "query": "name of the university",
-    "retrieved_chunks": 1,
-    "latency_ms": 27.02,
-    "total_tokens": 0,
+    "user": "sarayu",
+    "chat_id": "0160c7de-ea5c-41a4-9588-8b48b1d03c48",
+    "query": "give me the most important topics from this file.",
+    "retrieved_chunks": 5,
+    "latency_ms": 19099.78,
+    "total_tokens": 3644,
     "model": "llama-3.1-8b-instant",
-    "time": 1777357042.5126324
+    "time": 1777359576.892654
   },
   "last_upload": {
-    "file": "Presentation 6 (1).pptx",
-    "user": "anya",
-    "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+    "file": "Anshul_resume (1) (1).docx",
+    "user": "anshul18",
+    "chat_id": "d4ec5a9c-7a1b-4506-96d8-436dbc5f10eb",
     "chunks": 2,
-    "latency_ms": 938.65,
-    "time": 1777350084.62001
+    "latency_ms": 1669.69,
+    "time": 1777359452.327944
   },
-  "updated_at": 1777357042.5126324,
-  "last_error": {
-    "type": "upload_http_error",
-    "detail": "No text chunks were created. Check the file type/content and backend logs.",
-    "time": 1777350197.424538
-  }
+  "updated_at": 1777359576.8926566
 }
