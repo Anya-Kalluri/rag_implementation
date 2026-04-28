@@ -1,0 +1,17 @@
+[
+    {
+        "role": "user",
+        "content": "give me summary of this file."
+    },
+    {
+        "role": "assistant",
+        "content": "This file appears to be a cheat sheet for the pandas library in Python, which is a powerful data analysis tool. The cheat sheet covers various topics such as:\n\n1. Data Input/Output: Reading and writing data from various file formats such as CSV, Excel, HTML, and SQL.\n2. Data Manipulation: Filtering, sorting, grouping, and reshaping data.\n3. Data Analysis: Performing statistical analysis, data visualization, and data transformation.\n4. Data Cleaning: Handling missing data, data normalization, and data type conversion.\n5. Data Visualization: Creating plots and charts to visualize data.\n6. Data Storage: Storing data in various formats such as CSV, Excel, and HDF.\n7. Options and Settings: Customizing pandas behavior and display options.\n\nThe cheat sheet is organized in a concise and easy-to-read format, making it a useful resource for data scientists and analysts who work with pandas.",
+        "sources": [
+            "x3 A 1 T B 2 F C 3 NaN x1 x2 x3 A 1.0 T B 2.0 F D NaN T x1 x2 x3 A 1 T B 2 F x1 x2 x3 A 1 T B 2 F C 3 NaN D NaN T pd.merge(adf, bdf, how='left', on='x1') Join matching rows from bdf to adf. pd.merge(a",
+            "or more new columns. df['Volume'] = df.Length*df.Height*df.Depth Add single column. pd.qcut(df.col, n, labels=False) Bin column into n buckets. Vector function Vector function pandas provides a large ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "df.plot(title=\u201cGraph of A against B\u201d) Sets the title of the graph. df.plot() Plot a line graph for the DataFrame. df.plot.scatter(x='w', y='h') Plot a scatter graph of the DataFrame. df.plot.hist() Pl",
+            "Creating DataFrames Reshaping Data \u2013 Change layout, sorting, reindexing, renaming pd.melt(df) Gather columns into rows. df.pivot(columns='var', values='val') Spread rows into columns. pd.concat([df1,d"
+        ]
+    }
+]

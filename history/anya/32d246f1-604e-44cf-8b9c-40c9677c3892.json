@@ -1,0 +1,32 @@
+[
+    {
+        "role": "user",
+        "content": "give me summary of this file."
+    },
+    {
+        "role": "assistant",
+        "content": "Answer not found in document.",
+        "sources": [
+            "x3 A 1 T B 2 F C 3 NaN x1 x2 x3 A 1.0 T B 2.0 F D NaN T x1 x2 x3 A 1 T B 2 F x1 x2 x3 A 1 T B 2 F C 3 NaN D NaN T pd.merge(adf, bdf, how='left', on='x1') Join matching rows from bdf to adf. pd.merge(a",
+            "or more new columns. df['Volume'] = df.Length*df.Height*df.Depth Add single column. pd.qcut(df.col, n, labels=False) Bin column into n buckets. Vector function Vector function pandas provides a large ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "Creating DataFrames Reshaping Data \u2013 Change layout, sorting, reindexing, renaming pd.melt(df) Gather columns into rows. df.pivot(columns='var', values='val') Spread rows into columns. pd.concat([df1,d",
+            "df.plot(title=\u201cGraph of A against B\u201d) Sets the title of the graph. df.plot() Plot a line graph for the DataFrame. df.plot.scatter(x='w', y='h') Plot a scatter graph of the DataFrame. df.plot.hist() Pl"
+        ]
+    },
+    {
+        "role": "user",
+        "content": "what is this file about?"
+    },
+    {
+        "role": "assistant",
+        "content": "Answer not found in document",
+        "sources": [
+            "df.plot(title=\u201cGraph of A against B\u201d) Sets the title of the graph. df.plot() Plot a line graph for the DataFrame. df.plot.scatter(x='w', y='h') Plot a scatter graph of the DataFrame. df.plot.hist() Pl",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "x3 A 1 T B 2 F C 3 NaN x1 x2 x3 A 1.0 T B 2.0 F D NaN T x1 x2 x3 A 1 T B 2 F x1 x2 x3 A 1 T B 2 F C 3 NaN D NaN T pd.merge(adf, bdf, how='left', on='x1') Join matching rows from bdf to adf. pd.merge(a",
+            "Creating DataFrames Reshaping Data \u2013 Change layout, sorting, reindexing, renaming pd.melt(df) Gather columns into rows. df.pivot(columns='var', values='val') Spread rows into columns. pd.concat([df1,d",
+            "in pandas In a tidy data set: Each variable is saved in its own column & Each observation is saved in its own row Tidy data complements pandas\u2019s vectorized operations. pandas will automatically preser"
+        ]
+    }
+]

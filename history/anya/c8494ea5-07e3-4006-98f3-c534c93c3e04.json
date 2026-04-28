@@ -1,0 +1,11 @@
+[
+    {
+        "role": "user",
+        "content": "what is in this image."
+    },
+    {
+        "role": "assistant",
+        "content": "I don't see an image.",
+        "sources": []
+    }
+]

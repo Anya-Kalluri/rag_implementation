@@ -1,0 +1,17 @@
+[
+    {
+        "role": "user",
+        "content": "give summary"
+    },
+    {
+        "role": "assistant",
+        "content": "Summary:\n\nThe provided context appears to be a cheat sheet for pandas, a popular Python library for data manipulation and analysis. The cheat sheet covers various topics, including:\n\n1. Data Input/Output: Reading and writing data from various file formats, such as CSV, Excel, and SQL.\n2. Data Manipulation: Filtering, sorting, grouping, and merging data.\n3. Data Analysis: Performing statistical analysis, data visualization, and data transformation.\n4. Data Types: Working with different data types, such as numeric, datetime, and categorical data.\n5. Data Structures: Understanding and working with pandas data structures, such as Series and DataFrames.\n6. Data Operations: Performing various data operations, such as merging, joining, and grouping data.\n7. Data Visualization: Creating visualizations using pandas and matplotlib.\n8. Data Input/Output: Reading and writing data from various file formats, such as CSV, Excel, and SQL.\n\nThe cheat sheet also covers various pandas functions and methods, including:\n\n1. `merge()`: Merging two DataFrames based on a common column.\n2. `groupby()`: Grouping data by one or more columns.\n3. `pivot_table()`: Creating a pivot table from a DataFrame.\n4. `melt()`: Melting a DataFrame from wide to long format.\n5. `pivot()`: Creating a pivot table from a DataFrame.\n6. `stack()`: Stacking a DataFrame from long to wide format.\n7. `unstack()`: Unstacking a DataFrame from wide to long format.\n8. `reset_index()`: Resetting the index of a DataFrame.\n9. `drop()`: Dropping rows or columns from a DataFrame.\n10. `head()`: Displaying the first few rows of a DataFrame.\n11. `tail()`: Displaying the last few rows of a DataFrame.\n12. `describe()`: Displaying summary statistics for a DataFrame.\n13. `info()`: Displaying information about a DataFrame.\n14. `value_counts()`: Displaying the value counts for a Series.\n15. `plot()`: Creating a plot from a DataFrame.\n\nOverall, the cheat sheet provides a comprehensive overview of pandas and its various functions and methods, making it a useful resource for data scientists and analysts.",
+        "sources": [
+            "x3 A 1 T B 2 F C 3 NaN x1 x2 x3 A 1.0 T B 2.0 F D NaN T x1 x2 x3 A 1 T B 2 F x1 x2 x3 A 1 T B 2 F C 3 NaN D NaN T pd.merge(adf, bdf, how='left', on='x1') Join matching rows from bdf to adf. pd.merge(a",
+            "or more new columns. df['Volume'] = df.Length*df.Height*df.Depth Add single column. pd.qcut(df.col, n, labels=False) Bin column into n buckets. Vector function Vector function pandas provides a large ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "df.plot(title=\u201cGraph of A against B\u201d) Sets the title of the graph. df.plot() Plot a line graph for the DataFrame. df.plot.scatter(x='w', y='h') Plot a scatter graph of the DataFrame. df.plot.hist() Pl",
+            "in pandas In a tidy data set: Each variable is saved in its own column & Each observation is saved in its own row Tidy data complements pandas\u2019s vectorized operations. pandas will automatically preser"
+        ]
+    }
+]

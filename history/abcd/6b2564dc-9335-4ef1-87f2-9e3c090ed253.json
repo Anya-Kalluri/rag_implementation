@@ -1,0 +1,32 @@
+[
+    {
+        "role": "user",
+        "content": "give me summary of this file."
+    },
+    {
+        "role": "assistant",
+        "content": "The file appears to be a script for an episode of a TV show or a movie. The story revolves around two childhood friends, Arjun and Anjali, who seem to have a deep connection. The episode starts with Arjun reminiscing about his childhood and how Anjali always made sure he was included and never left out.\n\nThe scene then cuts to Arjun's present day, where he is shown to be nervous and anxious about something. It is revealed that Anjali is coming to visit him, and he is excited but also nervous about their reunion.\n\nAs Anjali arrives, Arjun's nervousness is palpable, and he is shown to be taking deep breaths to calm himself down. When Anjali finally approaches him, Arjun is overwhelmed with emotion, and they share a tender moment.\n\nHowever, their reunion is cut short when someone else calls Anjali away, leaving Arjun feeling confused and disappointed. The episode ends with Arjun's voiceover, wondering if he will ever see Anjali again.\n\nThe tone of the episode is nostalgic and sentimental, with a focus on the deep connection between Arjun and Anjali. The script suggests that their reunion may be more complicated than Arjun had anticipated, and that their relationship may be more complex than he had remembered.",
+        "sources": [
+            "Rey ball ivvu... Arjun kicks the ball back, but it goes a bit in the wrong direction. The kid gives him a disappointed look and chases the ball, nobody asks him to join them. Arjun sits back on the sw",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "Eh oorko amma neeku teledhu. A car comes and stops at the gate, anjali slowly gets down from the backdoor as her childhood friends go up to greet her. We don't entirely reveal anjali's face, just her "
+        ]
+    },
+    {
+        "role": "user",
+        "content": "what is the summary of this file?"
+    },
+    {
+        "role": "assistant",
+        "content": "This file appears to be a script for a scene in a movie or TV show, specifically a romantic reunion between two characters, Arjun and Anjali. The scene shows Arjun's nervous anticipation as Anjali arrives, and their emotional reunion. However, the reunion is cut short when Anjali is called away by someone else, leaving Arjun confused and disappointed.",
+        "sources": [
+            "Eh oorko amma neeku teledhu. A car comes and stops at the gate, anjali slowly gets down from the backdoor as her childhood friends go up to greet her. We don't entirely reveal anjali's face, just her ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter ",
+            "the maximum and minimum values of each row of the DataFrame Apply a mapping to every element in a DataFrame or Series, useful for recategorizing or transforming data. df.plot.boxplot() Plot a scatter "
+        ]
+    }
+]

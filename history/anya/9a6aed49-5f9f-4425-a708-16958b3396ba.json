@@ -1,0 +1,14 @@
+[
+    {
+        "role": "user",
+        "content": "give me summary of this ppt."
+    },
+    {
+        "role": "assistant",
+        "content": "A compact thermal monitoring system was developed using an ESP32-based portable system. The system captures thermal data from the environment, processes it in real-time, and visualizes the output as a heatmap on a 1.8-inch TFT display. The system has applications in temperature monitoring, human presence detection, and educational demonstrations. However, it has limitations such as low spatial resolution and limited accuracy compared to commercial systems. Future improvements include using higher-resolution sensors and wireless visualization.",
+        "sources": [
+            "ESP32-Based Portable Thermal Monitoring & Imaging System Yatin \u2013 SE22UECE007 Anshul \u2013 SE22UECM013 Siddharth \u2013 SE22UECM016 Introduction: ESP32-Based Portable Thermal Monitoring & Imaging System Thermal",
+            "Temperature monitoring Human presence detection Educational demonstrations Limitations Low spatial resolution due to 8 \u00d7 8 sensor Limited accuracy compared to commercial systems Conclusion & Future Sc"
+        ]
+    }
+]

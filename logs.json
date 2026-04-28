@@ -1,0 +1,401 @@
+[
+  {
+    "type": "query",
+    "time": 1777123723.526919,
+    "data": {
+      "user": "anshul18",
+      "latency": 1.6596996784210205,
+      "query": "what are the top five main topics in this file?"
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777123759.4218838,
+    "data": {
+      "user": "anshul18",
+      "file": "Pandas_Cheat_Sheet.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777123767.7550497,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.30658435821533203,
+      "query": "what are the top five main topics in this file?"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777124648.5497067,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.980034589767456,
+      "query": "what are the top five main topics in this file?"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777124753.1185548,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.4445183277130127,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777124847.67128,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.6324443817138672,
+      "query": "give me top 5 files that i should focus on."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777124871.7002368,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.2982609272003174,
+      "query": "give me the list of columns from this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777125076.2890375,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.6750657558441162,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777125466.162898,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.8970811367034912,
+      "query": "give me a summary of this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777184167.3627915,
+    "data": {
+      "user": "anshul18",
+      "latency": 1.6000120639801025,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777282831.968106,
+    "data": {
+      "user": "anshul18",
+      "latency": 0.7895340919494629,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777284560.9824297,
+    "data": {
+      "user": "anya",
+      "file": "Pandas_Cheat_Sheet.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777284571.9714036,
+    "data": {
+      "user": "anya",
+      "latency": 2.3455402851104736,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777284582.3488343,
+    "data": {
+      "user": "anya",
+      "latency": 0.4914083480834961,
+      "query": "what is this file about?"
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777284849.1044698,
+    "data": {
+      "user": "anya",
+      "file": "Pandas_Cheat_Sheet.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777284856.4922287,
+    "data": {
+      "user": "anya",
+      "latency": 1.1573185920715332,
+      "query": "give me summary of this file."
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777286019.7379522,
+    "data": {
+      "user": "anya",
+      "file": "Pandas_Cheat_Sheet.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777286028.0373986,
+    "data": {
+      "user": "anya",
+      "latency": 0.8710484504699707,
+      "query": "give me a summary of this file."
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777289042.5768695,
+    "data": {
+      "user": "anya",
+      "file": "Pandas_Cheat_Sheet.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777289108.3746133,
+    "data": {
+      "user": "anya",
+      "latency": 1.884174108505249,
+      "query": "give me top 10 important commands."
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777289344.7430854,
+    "data": {
+      "user": "anya",
+      "file": "Inka em anukole_ (1).pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777289382.2933867,
+    "data": {
+      "user": "anya",
+      "latency": 2.312391996383667,
+      "query": "what is this file about."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777289447.571769,
+    "data": {
+      "user": "anya",
+      "latency": 0.6665065288543701,
+      "query": "what are the column names"
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777289720.1663675,
+    "data": {
+      "user": "anya",
+      "file": "Anshul_Reddy_Resume.pdf"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777289770.1098127,
+    "data": {
+      "user": "anya",
+      "latency": 1.277625322341919,
+      "query": "what is my name"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777289801.9659142,
+    "data": {
+      "user": "anya",
+      "latency": 0.3929097652435303,
+      "query": "where did i study\\"
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777291889.4772065,
+    "data": {
+      "user": "anya",
+      "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+      "latency_ms": 10482.58,
+      "query": "what are the experiences mentioned?",
+      "retrieved_chunks": 1,
+      "tokens": 669,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.2,
+      "response_relevance": 0.8,
+      "error": null
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777349543.929452,
+    "data": {
+      "user": "anya",
+      "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+      "latency_ms": 10342.53,
+      "query": "what are the achievements mentioned?",
+      "retrieved_chunks": 1,
+      "tokens": 651,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.4,
+      "response_relevance": 0.8,
+      "error": null
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777349633.3296087,
+    "data": {
+      "user": "anya",
+      "file": "Pandas_Cheat_Sheet.pdf",
+      "chat_id": "5c94f8da-7e72-4dae-b6f4-b73c6fad89e3",
+      "chunks": 6,
+      "latency_ms": 2409.15
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777349645.324008,
+    "data": {
+      "user": "anya",
+      "chat_id": "5c94f8da-7e72-4dae-b6f4-b73c6fad89e3",
+      "latency_ms": 1063.44,
+      "query": "what is the summary of this file?",
+      "retrieved_chunks": 5,
+      "tokens": 3580,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.8571428571428571,
+      "response_relevance": 0.8571428571428571,
+      "error": null
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777349667.3708858,
+    "data": {
+      "user": "anya",
+      "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+      "latency_ms": 209.75,
+      "query": "where did he study?",
+      "retrieved_chunks": 1,
+      "tokens": 612,
+      "retrieval_precision_at_k": 0.0,
+      "retrieval_recall_proxy": 0.0,
+      "response_relevance": 0.0,
+      "error": null
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777349683.3763404,
+    "data": {
+      "user": "anya",
+      "chat_id": "5c94f8da-7e72-4dae-b6f4-b73c6fad89e3",
+      "latency_ms": 480.54,
+      "query": "give me top 3 commands.",
+      "retrieved_chunks": 5,
+      "tokens": 3382,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.4,
+      "response_relevance": 0.0,
+      "error": null
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777349990.9782887,
+    "data": {
+      "user": "anya",
+      "file": "pinout.pptx",
+      "chat_id": "77400c8b-652b-419b-aee8-abbfdc1d5fb2",
+      "chunks": 1,
+      "latency_ms": 768.27
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777350000.4413652,
+    "data": {
+      "user": "anya",
+      "chat_id": "77400c8b-652b-419b-aee8-abbfdc1d5fb2",
+      "latency_ms": 252.47,
+      "query": "what is the content in this ppt?",
+      "retrieved_chunks": 1,
+      "tokens": 134,
+      "retrieval_precision_at_k": 0.0,
+      "retrieval_recall_proxy": 0.0,
+      "response_relevance": 0.14285714285714285,
+      "error": null
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777350015.7937202,
+    "data": {
+      "user": "anya",
+      "chat_id": "77400c8b-652b-419b-aee8-abbfdc1d5fb2",
+      "latency_ms": 222.55,
+      "query": "give me summary.",
+      "retrieved_chunks": 1,
+      "tokens": 140,
+      "retrieval_precision_at_k": 0.0,
+      "retrieval_recall_proxy": 0.0,
+      "response_relevance": 0.3333333333333333,
+      "error": null
+    }
+  },
+  {
+    "type": "upload",
+    "time": 1777350084.6227193,
+    "data": {
+      "user": "anya",
+      "file": "Presentation 6 (1).pptx",
+      "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+      "chunks": 2,
+      "latency_ms": 938.65
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777350095.7000368,
+    "data": {
+      "user": "anya",
+      "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+      "latency_ms": 445.78,
+      "query": "give me summary of this file.",
+      "retrieved_chunks": 2,
+      "tokens": 799,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.16666666666666666,
+      "response_relevance": 0.3333333333333333,
+      "error": null
+    }
+  },
+  {
+    "type": "error",
+    "time": 1777350197.4286454,
+    "data": {
+      "type": "upload_http_error",
+      "user": "anya",
+      "chat_id": "5c94f8da-7e72-4dae-b6f4-b73c6fad89e3",
+      "file": "iit.jpg",
+      "detail": "No text chunks were created. Check the file type/content and backend logs."
+    }
+  }
+]
