@@ -1,48 +1,43 @@
 {
-  "uploads": 33,
-  "queries": 63,
-  "errors": 2,
-  "total_latency_ms": 26689.940690994263,
-  "avg_latency_ms": 423.65,
-  "last_latency_ms": 1468.29,
-  "prompt_tokens": 13236,
-  "completion_tokens": 1002,
-  "total_tokens": 14238,
-  "estimated_cost_usd": 0.00074196,
+  "uploads": 3,
+  "queries": 7,
+  "errors": 0,
+  "total_latency_ms": 31341.00604057312,
+  "avg_latency_ms": 4477.29,
+  "last_latency_ms": 19099.78,
+  "prompt_tokens": 19878,
+  "completion_tokens": 877,
+  "total_tokens": 20755,
+  "estimated_cost_usd": 0.00106406,
   "model_calls": {
-    "llama-3.1-8b-instant": 10
+    "llama-3.1-8b-instant": 7
   },
   "retrieval": {
-    "evaluated_queries": 10,
-    "avg_precision_at_k": 0.7001,
-    "avg_recall_proxy": 0.331,
-    "avg_response_relevance": 0.4695,
+    "evaluated_queries": 7,
+    "avg_precision_at_k": 0.8143,
+    "avg_recall_proxy": 0.527,
+    "avg_response_relevance": 0.3714,
     "last_precision_at_k": 1.0,
-    "last_recall_proxy": 0.8571,
-    "last_response_relevance": 0.8571
+    "last_recall_proxy": 0.5556,
+    "last_response_relevance": 0.6667
   },
   "last_query": {
     "user": "sarayu",
-    "chat_id": "aef98e3f-6b32-4618-b110-1fa348e15b13",
-    "query": "what is the summary of this file?",
+    "chat_id": "0160c7de-ea5c-41a4-9588-8b48b1d03c48",
+    "query": "give me the most important topics from this file.",
     "retrieved_chunks": 5,
-    "latency_ms": 1468.29,
-    "total_tokens": 3500,
+    "latency_ms": 19099.78,
+    "total_tokens": 3644,
     "model": "llama-3.1-8b-instant",
-    "time": 1777354340.7063437
+    "time": 1777359576.892654
   },
   "last_upload": {
-    "file": "Presentation 6 (1).pptx",
-    "user": "anya",
-    "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+    "file": "Anshul_resume (1) (1).docx",
+    "user": "anshul18",
+    "chat_id": "d4ec5a9c-7a1b-4506-96d8-436dbc5f10eb",
     "chunks": 2,
-    "latency_ms": 938.65,
-    "time": 1777350084.62001
+    "latency_ms": 1669.69,
+    "time": 1777359452.327944
   },
-  "updated_at": 1777354340.70635,
-  "last_error": {
-    "type": "upload_http_error",
-    "detail": "Could not extract text from jpg: OCR is not available because the Tesseract executable was not found. Install Tesseract OCR and optionally set TESSERACT_CMD in .env.",
-    "time": 1777352713.7922335
-  }
+  "updated_at": 1777359576.8926566
 }

@@ -1,38 +1,35 @@
-import json
-import os
 from datetime import datetime
 
-FILE = "guest_usage.json"
-
-
-def load():
-    if os.path.exists(FILE):
-        with open(FILE) as f:
-            return json.load(f)
-    return {}
-
-
-def save(data):
-    with open(FILE, "w") as f:
-        json.dump(data, f, indent=4)
+from backend.db import connect, init_db
 
 
 def check_limit(username, limit=5):
-    data = load()
-
+    init_db()
     today = datetime.now().strftime("%Y-%m-%d")
 
-    user = data.get(username, {"count": 0, "date": today})
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT count, date FROM guest_usage WHERE username = ?",
+            (username,),
+        ).fetchone()
 
-    if user["date"] != today:
-        user = {"count": 0, "date": today}
+        if not row or row["date"] != today:
+            count = 0
+        else:
+            count = int(row["count"] or 0)
 
-    if user["count"] >= limit:
-        return False
+        if count >= limit:
+            return False
 
-    user["count"] += 1
-    data[username] = user
-
-    save(data)
+        conn.execute(
+            """
+            INSERT INTO guest_usage (username, count, date)
+            VALUES (?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                count = excluded.count,
+                date = excluded.date
+            """,
+            (username, count + 1, today),
+        )
 
     return True

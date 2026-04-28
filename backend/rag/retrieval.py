@@ -1,10 +1,10 @@
-import json
-import os
 import re
 
-import faiss
 import numpy as np
 from rank_bm25 import BM25Okapi
+
+from backend.db import connect, decode, init_db
+from backend.vector_index import read_index
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
@@ -14,29 +14,40 @@ def tokenize(text):
     return TOKEN_RE.findall(str(text or "").lower())
 
 
-def load_store(base):
-    index_path = os.path.join(base, "index.faiss")
-    meta_path = os.path.join(base, "meta.json")
+def load_chunks(user, chat):
+    init_db()
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, text, roles_json
+            FROM chunks
+            WHERE user_id = ? AND chat_id = ?
+            ORDER BY position ASC
+            """,
+            (str(user).strip(), str(chat).strip()),
+        ).fetchall()
 
-    if not os.path.exists(meta_path):
-        print("STORE NOT FOUND:", base)
-        return None, []
+    return [
+        {
+            "id": row["id"],
+            "text": row["text"],
+            "roles": decode(row["roles_json"], []),
+        }
+        for row in rows
+    ]
 
-    index = None
-    if os.path.exists(index_path):
-        try:
-            index = faiss.read_index(index_path)
-        except Exception as e:
-            print("FAISS LOAD ERROR:", e)
-    else:
+
+def load_store(user, chat):
+    try:
+        index = read_index(user, chat)
+    except Exception as e:
+        print("FAISS LOAD ERROR:", e)
+        index = None
+
+    if index is None:
         print("FAISS INDEX NOT FOUND; BM25 FALLBACK ENABLED")
 
-    try:
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-    except Exception as e:
-        print("META LOAD ERROR:", e)
-        return index, []
+    meta = load_chunks(user, chat)
 
     if not isinstance(meta, list):
         print("META ERROR: expected list, got", type(meta).__name__)
@@ -128,19 +139,16 @@ def unique_docs(docs, limit):
 
 
 def retrieve(query, role, user, chat, k=5):
-    base = os.path.join("vectorstore", str(user).strip(), str(chat).strip())
-
     print("\n========== RETRIEVE DEBUG ==========")
     print("USER:", user)
     print("ROLE:", role)
     print("CHAT:", chat)
-    print("PATH:", base)
 
     if not query or not str(query).strip():
         print("EMPTY QUERY")
         return []
 
-    index, meta = load_store(base)
+    index, meta = load_store(user, chat)
 
     if not meta:
         print("NO META")

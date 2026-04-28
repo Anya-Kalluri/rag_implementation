@@ -19,3 +19,5 @@ groq
 jinja2
 openpyxl
 xlrd
+redis
+rapidocr-onnxruntime

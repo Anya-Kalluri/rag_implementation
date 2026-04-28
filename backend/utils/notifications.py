@@ -1,32 +1,61 @@
-import json
-import os
 from datetime import datetime
+import time
 
-NOTIF_FILE = "notifications.json"
+from backend.db import connect, decode, encode, init_db
+
+
+DEFAULT_TARGETS = ("admin", "manager")
 
 
 def load_notifications():
-    if os.path.exists(NOTIF_FILE):
-        with open(NOTIF_FILE, "r") as f:
-            return json.load(f)
-    return {"admin": [], "manager": []}
+    init_db()
+    data = {target: [] for target in DEFAULT_TARGETS}
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT target_role, entry_json
+            FROM notifications
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+
+    for row in rows:
+        target = row["target_role"]
+        data.setdefault(target, []).append(decode(row["entry_json"], {}))
+
+    return data
 
 
 def save_notifications(data):
-    with open(NOTIF_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    init_db()
+    with connect() as conn:
+        conn.execute("DELETE FROM notifications")
+        for target, entries in (data or {}).items():
+            for entry in entries or []:
+                conn.execute(
+                    """
+                    INSERT INTO notifications (target_role, entry_json, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (target, encode(entry), time.time()),
+                )
 
 
 def add_notification(username, file_name):
-    data = load_notifications()
-
+    init_db()
     entry = {
         "user": username,
         "file": file_name,
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    data["admin"].append(entry)
-    data["manager"].append(entry)
-
-    save_notifications(data)
+    with connect() as conn:
+        for target in DEFAULT_TARGETS:
+            conn.execute(
+                """
+                INSERT INTO notifications (target_role, entry_json, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (target, encode(entry), time.time()),
+            )

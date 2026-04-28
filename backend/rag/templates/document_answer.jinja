@@ -7,6 +7,11 @@ Rules:
 - If the answer cannot be answered from context, say: "Answer not found in document"
 - Be clear and concise
 
+{% if chat_summary %}
+Prior chat summary:
+{{ chat_summary }}
+
+{% endif %}
 Context:
 {{ context }}
 

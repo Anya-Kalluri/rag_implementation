@@ -1,60 +1,68 @@
-import json
-import os
+import time
 import uuid
 
-FILE = "chats.json"
-
-
-def load():
-    if os.path.exists(FILE):
-        return json.load(open(FILE))
-    return {}
-
-
-def save(data):
-    with open(FILE, "w") as f:
-        json.dump(data, f, indent=4)
+from backend.db import connect, init_db
 
 
 def create_chat(user):
-    data = load()
-
+    init_db()
     chat_id = str(uuid.uuid4())
+    now = time.time()
 
-    if user not in data:
-        data[user] = []
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS count FROM chats WHERE user = ?",
+            (user,),
+        ).fetchone()
+        position = int(row["count"] or 0) + 1
+        conn.execute(
+            """
+            INSERT INTO chats (user, chat_id, title, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user, chat_id, f"Chat {position}", position, now, now),
+        )
 
-    data[user].append({
-        "chat_id": chat_id,
-        "title": f"Chat {len(data[user]) + 1}"
-    })
-
-    save(data)
     return chat_id
 
 
 def get_chats(user):
-    data = load()
-    return data.get(user, [])
+    init_db()
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT chat_id, title
+            FROM chats
+            WHERE user = ?
+            ORDER BY position ASC, created_at ASC
+            """,
+            (user,),
+        ).fetchall()
+
+    return [{"chat_id": row["chat_id"], "title": row["title"]} for row in rows]
 
 
-# 🔥 NEW: DELETE CHAT
 def delete_chat(user, chat_id):
-    data = load()
+    init_db()
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM chats WHERE user = ? AND chat_id = ?",
+            (user, chat_id),
+        )
+        conn.execute(
+            "DELETE FROM chat_history WHERE user = ? AND chat_id = ?",
+            (user, chat_id),
+        )
 
-    if user in data:
-        data[user] = [c for c in data[user] if c["chat_id"] != chat_id]
 
-    save(data)
-
-
-# 🔥 NEW: RENAME CHAT
 def rename_chat(user, chat_id, new_title):
-    data = load()
-
-    if user in data:
-        for c in data[user]:
-            if c["chat_id"] == chat_id:
-                c["title"] = new_title
-
-    save(data)
+    init_db()
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE chats
+            SET title = ?, updated_at = ?
+            WHERE user = ? AND chat_id = ?
+            """,
+            (new_title, time.time(), user, chat_id),
+        )

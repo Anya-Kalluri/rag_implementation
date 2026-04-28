@@ -51,6 +51,7 @@ ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/rename-chat", "Purpose": "Rename active chat"},
     {"Method": "DELETE", "Endpoint": "/delete-chat/{chat_id}", "Purpose": "Delete chat metadata"},
     {"Method": "POST", "Endpoint": "/upload", "Purpose": "Extract, chunk, embed, and index a file"},
+    {"Method": "POST", "Endpoint": "/ingest-url", "Purpose": "Scrape URL, chunk, embed, and index text"},
     {"Method": "GET", "Endpoint": "/files?chat_id=...", "Purpose": "List indexed files for active chat"},
     {"Method": "POST", "Endpoint": "/query", "Purpose": "Retrieve context and generate answer"},
     {"Method": "GET", "Endpoint": "/chat-history/{chat_id}", "Purpose": "Load saved conversation"},
@@ -533,6 +534,32 @@ def upload_panel(chat_id):
                 st.rerun()
 
             st.error(f"Processing failed: {error_detail(res)}")
+
+        st.divider()
+        url_to_ingest = st.text_input("Web URL")
+        if st.button("Process URL", disabled=not url_to_ingest.strip()):
+            with st.spinner("Fetching and indexing URL content..."):
+                try:
+                    res = request(
+                        "POST",
+                        "/ingest-url",
+                        json={"url": url_to_ingest.strip(), "chat_id": chat_id},
+                        timeout=180,
+                    )
+                except requests.RequestException:
+                    st.error("URL ingestion failed. Backend is not reachable.")
+                    return
+
+            if res.status_code == 200:
+                data = res.json()
+                st.session_state.upload_notice = {
+                    "file": data.get("url", url_to_ingest.strip()),
+                    "chunks": data.get("chunks", 0),
+                    "chat_id": data.get("chat_id", chat_id),
+                }
+                st.rerun()
+
+            st.error(f"URL processing failed: {error_detail(res)}")
 
 
 def render_history():

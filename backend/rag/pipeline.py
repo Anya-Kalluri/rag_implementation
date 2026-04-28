@@ -2,7 +2,7 @@ from .retrieval import retrieve
 from .generator import generate
 
 
-def rag(query, role, user, chat):
+def rag(query, role, user, chat, chat_summary=""):
     
     # 🔥 Safe retrieval (never allow None)
     chunks = retrieve(query, role, user, chat)
@@ -16,7 +16,7 @@ def rag(query, role, user, chat):
 
     # 🔥 Generate answer safely
     try:
-        answer, generation_metrics = generate(query, chunks)
+        answer, generation_metrics = generate(query, chunks, chat_summary=chat_summary)
     except Exception as e:
         answer = "Error generating response. Please try again."
         generation_metrics = {"error": str(e)}
