@@ -397,5 +397,37 @@
       "file": "iit.jpg",
       "detail": "No text chunks were created. Check the file type/content and backend logs."
     }
+  },
+  {
+    "type": "query",
+    "time": 1777357025.775222,
+    "data": {
+      "user": "anya",
+      "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+      "latency_ms": 7820.96,
+      "query": "what movies did he make?",
+      "retrieved_chunks": 1,
+      "tokens": 0,
+      "retrieval_precision_at_k": 0.0,
+      "retrieval_recall_proxy": 0.0,
+      "response_relevance": 0.0,
+      "error": "GROQ_API_KEY is missing. Check your .env file."
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777357042.5255785,
+    "data": {
+      "user": "anya",
+      "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+      "latency_ms": 27.02,
+      "query": "name of the university",
+      "retrieved_chunks": 1,
+      "tokens": 0,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.5,
+      "response_relevance": 0.0,
+      "error": "GROQ_API_KEY is missing. Check your .env file."
+    }
   }
 ]

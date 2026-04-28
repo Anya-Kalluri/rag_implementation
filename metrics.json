@@ -1,35 +1,35 @@
 {
   "uploads": 33,
-  "queries": 61,
+  "queries": 63,
   "errors": 1,
-  "total_latency_ms": 23499.648571014404,
-  "avg_latency_ms": 385.24,
-  "last_latency_ms": 445.78,
+  "total_latency_ms": 31347.625732421875,
+  "avg_latency_ms": 497.58,
+  "last_latency_ms": 27.02,
   "prompt_tokens": 9325,
   "completion_tokens": 642,
   "total_tokens": 9967,
   "estimated_cost_usd": 0.00051761,
   "model_calls": {
-    "llama-3.1-8b-instant": 8
+    "llama-3.1-8b-instant": 10
   },
   "retrieval": {
-    "evaluated_queries": 8,
-    "avg_precision_at_k": 0.6251,
-    "avg_recall_proxy": 0.253,
-    "avg_response_relevance": 0.4083,
+    "evaluated_queries": 10,
+    "avg_precision_at_k": 0.6,
+    "avg_recall_proxy": 0.2524,
+    "avg_response_relevance": 0.3266,
     "last_precision_at_k": 1.0,
-    "last_recall_proxy": 0.1667,
-    "last_response_relevance": 0.3333
+    "last_recall_proxy": 0.5,
+    "last_response_relevance": 0.0
   },
   "last_query": {
     "user": "anya",
-    "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
-    "query": "give me summary of this file.",
-    "retrieved_chunks": 2,
-    "latency_ms": 445.78,
-    "total_tokens": 799,
+    "chat_id": "98e4d88c-8a11-4290-84e5-3272274bef05",
+    "query": "name of the university",
+    "retrieved_chunks": 1,
+    "latency_ms": 27.02,
+    "total_tokens": 0,
     "model": "llama-3.1-8b-instant",
-    "time": 1777350095.6967325
+    "time": 1777357042.5126324
   },
   "last_upload": {
     "file": "Presentation 6 (1).pptx",
@@ -39,7 +39,7 @@
     "latency_ms": 938.65,
     "time": 1777350084.62001
   },
-  "updated_at": 1777350197.4245405,
+  "updated_at": 1777357042.5126324,
   "last_error": {
     "type": "upload_http_error",
     "detail": "No text chunks were created. Check the file type/content and backend logs.",

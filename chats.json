@@ -68,5 +68,11 @@
             "chat_id": "021e3248-e1b2-4650-8c1f-b4485047fcf6",
             "title": "Chat 1"
         }
+    ],
+    "sarayu": [
+        {
+            "chat_id": "59bda425-e579-4ced-a130-ec0245761cd2",
+            "title": "Chat 1"
+        }
     ]
 }

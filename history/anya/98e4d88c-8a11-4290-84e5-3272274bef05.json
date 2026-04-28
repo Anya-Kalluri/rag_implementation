@@ -83,5 +83,47 @@
             "retrieval_recall_proxy": 0.0,
             "response_relevance": 0.0
         }
+    },
+    {
+        "role": "user",
+        "content": "what movies did he make?"
+    },
+    {
+        "role": "assistant",
+        "content": "Error generating response. Please try again.",
+        "sources": [
+            "ANSHUL REDDY Hyderabad, India | +91 7993338887 LinkedIn | Gmail | GitHub PROFESSIONAL SUMMARY Electronics & Computer Science student at Mahindra University with a strong foundation in software develop"
+        ],
+        "telemetry": {
+            "latency_ms": 7820.96,
+            "retrieved_chunks": 1,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "retrieval_precision_at_k": 0.0,
+            "retrieval_recall_proxy": 0.0,
+            "response_relevance": 0.0
+        }
+    },
+    {
+        "role": "user",
+        "content": "name of the university"
+    },
+    {
+        "role": "assistant",
+        "content": "Error generating response. Please try again.",
+        "sources": [
+            "ANSHUL REDDY Hyderabad, India | +91 7993338887 LinkedIn | Gmail | GitHub PROFESSIONAL SUMMARY Electronics & Computer Science student at Mahindra University with a strong foundation in software develop"
+        ],
+        "telemetry": {
+            "latency_ms": 27.02,
+            "retrieved_chunks": 1,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "retrieval_precision_at_k": 1.0,
+            "retrieval_recall_proxy": 0.5,
+            "response_relevance": 0.0
+        }
     }
 ]
