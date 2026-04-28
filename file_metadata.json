@@ -61,5 +61,31 @@
     "role": "manager",
     "chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
     "path": "uploads\\anya\\49628913-4c74-4fb8-bae2-ccb078153834\\Presentation 6 (1).pptx"
+  },
+  {
+    "file": "Presentation 6 (1).pptx",
+    "uploaded_by": "a18",
+    "role": "viewer",
+    "chat_id": "021e3248-e1b2-4650-8c1f-b4485047fcf6",
+    "path": "uploads\\anya\\49628913-4c74-4fb8-bae2-ccb078153834\\Presentation 6 (1).pptx",
+    "source_file": "Presentation 6 (1).pptx",
+    "source_uploaded_by": "anya",
+    "source_role": "manager",
+    "source_chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+    "source_path": "uploads\\anya\\49628913-4c74-4fb8-bae2-ccb078153834\\Presentation 6 (1).pptx",
+    "file_key": "4e1ac23b2582513c"
+  },
+  {
+    "file": "Pandas_Cheat_Sheet.pdf",
+    "uploaded_by": "sarayu",
+    "role": "guest",
+    "chat_id": "aef98e3f-6b32-4618-b110-1fa348e15b13",
+    "path": "uploads/anya/32d246f1-604e-44cf-8b9c-40c9677c3892\\Pandas_Cheat_Sheet.pdf",
+    "source_file": "Pandas_Cheat_Sheet.pdf",
+    "source_uploaded_by": "anya",
+    "source_role": "manager",
+    "source_chat_id": "32d246f1-604e-44cf-8b9c-40c9677c3892",
+    "source_path": "uploads/anya/32d246f1-604e-44cf-8b9c-40c9677c3892\\Pandas_Cheat_Sheet.pdf",
+    "file_key": "8aa65c043501c4d2"
   }
 ]

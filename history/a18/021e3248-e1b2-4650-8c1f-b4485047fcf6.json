@@ -1,0 +1,24 @@
+[
+    {
+        "role": "user",
+        "content": "what is the summary of this file?"
+    },
+    {
+        "role": "assistant",
+        "content": "This document describes the development of a portable and low-cost thermal monitoring and imaging system based on the ESP32 microcontroller. The system uses an infrared thermal sensor to capture temperature data, which is then processed and visualized on a TFT display as a heatmap. The system has applications in temperature monitoring, human presence detection, and educational demonstrations, but has limitations such as low spatial resolution and limited accuracy compared to commercial systems.",
+        "sources": [
+            "ESP32-Based Portable Thermal Monitoring & Imaging System Yatin \u2013 SE22UECE007 Anshul \u2013 SE22UECM013 Siddharth \u2013 SE22UECM016 Introduction: ESP32-Based Portable Thermal Monitoring & Imaging System Thermal",
+            "Temperature monitoring Human presence detection Educational demonstrations Limitations Low spatial resolution due to 8 \u00d7 8 sensor Limited accuracy compared to commercial systems Conclusion & Future Sc"
+        ],
+        "telemetry": {
+            "latency_ms": 1722.0,
+            "retrieved_chunks": 2,
+            "prompt_tokens": 687,
+            "completion_tokens": 84,
+            "total_tokens": 771,
+            "retrieval_precision_at_k": 1.0,
+            "retrieval_recall_proxy": 0.4286,
+            "response_relevance": 0.5714
+        }
+    }
+]

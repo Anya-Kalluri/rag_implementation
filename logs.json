@@ -397,5 +397,76 @@
       "file": "iit.jpg",
       "detail": "No text chunks were created. Check the file type/content and backend logs."
     }
+  },
+  {
+    "type": "error",
+    "time": 1777352713.8172405,
+    "data": {
+      "type": "upload_http_error",
+      "user": "anya",
+      "chat_id": "8cf95e58-ed7f-49f3-adaf-3e1f41a61e0f",
+      "file": "iit.jpg",
+      "detail": "Could not extract text from jpg: OCR is not available because the Tesseract executable was not found. Install Tesseract OCR and optionally set TESSERACT_CMD in .env."
+    }
+  },
+  {
+    "type": "file_selected",
+    "time": 1777353296.5339231,
+    "data": {
+      "user": "a18",
+      "role": "viewer",
+      "chat_id": "021e3248-e1b2-4650-8c1f-b4485047fcf6",
+      "file": "Presentation 6 (1).pptx",
+      "source_uploaded_by": "anya",
+      "source_chat_id": "49628913-4c74-4fb8-bae2-ccb078153834",
+      "chunks": 2,
+      "latency_ms": 8455.35
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777353309.7303965,
+    "data": {
+      "user": "a18",
+      "chat_id": "021e3248-e1b2-4650-8c1f-b4485047fcf6",
+      "latency_ms": 1722.0,
+      "query": "what is the summary of this file?",
+      "retrieved_chunks": 2,
+      "tokens": 771,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.42857142857142855,
+      "response_relevance": 0.5714285714285714,
+      "error": null
+    }
+  },
+  {
+    "type": "file_selected",
+    "time": 1777354330.2127156,
+    "data": {
+      "user": "sarayu",
+      "role": "guest",
+      "chat_id": "aef98e3f-6b32-4618-b110-1fa348e15b13",
+      "file": "Pandas_Cheat_Sheet.pdf",
+      "source_uploaded_by": "anya",
+      "source_chat_id": "32d246f1-604e-44cf-8b9c-40c9677c3892",
+      "chunks": 6,
+      "latency_ms": 3425.09
+    }
+  },
+  {
+    "type": "query",
+    "time": 1777354340.7097752,
+    "data": {
+      "user": "sarayu",
+      "chat_id": "aef98e3f-6b32-4618-b110-1fa348e15b13",
+      "latency_ms": 1468.29,
+      "query": "what is the summary of this file?",
+      "retrieved_chunks": 5,
+      "tokens": 3500,
+      "retrieval_precision_at_k": 1.0,
+      "retrieval_recall_proxy": 0.8571428571428571,
+      "response_relevance": 0.8571428571428571,
+      "error": null
+    }
   }
 ]

@@ -9,11 +9,6 @@
         "password": "$pbkdf2-sha256$29000$q5Wy9v4/R4ix1jrH.L.39g$BkIUqcHwrlFQLPANChi/qoHTjVsSRrrVdcdom0yVMNs",
         "role": "admin"
     },
-    "xyz": {
-        "username": "xyz",
-        "password": "$pbkdf2-sha256$29000$8h6jVArBmNPau9d6T6k15g$szEtn1KWGBDee74eUfDAJzVnHtrZR21xBDoPMUD6JUA",
-        "role": "manager"
-    },
     "abcd": {
         "username": "abcd",
         "password": "$pbkdf2-sha256$29000$IWQshRBijBECYIyRUiqFcA$Km2wSAR.HYAqZAeZgN4OGrmD9XxiAfIyscOLM6AGAn0",

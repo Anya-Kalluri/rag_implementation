@@ -1,5 +1,6 @@
 from groq import Groq
 from backend.config.settings import GROQ_API_KEY
+from backend.rag.prompt_loader import render_prompt
 
 client = None
 
@@ -37,25 +38,7 @@ def generate(query, chunks):
     context_chunks = chunks[:5]  # prevent overload
     context = "\n\n".join([c["text"] for c in context_chunks])
 
-    # -------------------------------
-    # STRONG PROMPT (ANTI-HALLUCINATION)
-    # -------------------------------
-    prompt = f"""
-You are a strict document assistant.
-
-Rules:
-- Answer ONLY from the provided context
-- Do NOT use outside knowledge
-- If the user asks for a summary, summarize the provided context
-- If the answer cannot be answered from context, say: "Answer not found in document"
-- Be clear and concise
-
-Context:
-{context}
-
-Question:
-{query}
-"""
+    prompt = render_prompt("document_answer.jinja", context=context, query=query)
 
     try:
         res = get_client().chat.completions.create(

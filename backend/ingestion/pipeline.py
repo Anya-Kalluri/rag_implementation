@@ -10,6 +10,29 @@ from .embeddings import get_embeddings
 from .loaders import *
 
 
+SUPPORTED_FILE_TYPES = {
+    "pdf": load_pdf,
+    "docx": load_docx,
+    "pptx": load_pptx,
+    "csv": load_csv,
+    "json": load_json,
+    "txt": load_text,
+    "md": load_text,
+    "html": load_html,
+    "htm": load_html,
+    "xlsx": load_excel,
+    "xls": load_excel,
+    "image": load_image,
+    "png": load_image,
+    "jpg": load_image,
+    "jpeg": load_image,
+    "tif": load_image,
+    "tiff": load_image,
+    "bmp": load_image,
+    "webp": load_image,
+}
+
+
 def _load_existing_meta(meta_path):
     if not os.path.exists(meta_path):
         return []
@@ -51,24 +74,14 @@ def process_file(file, file_type, user_id, chat_id, roles):
     print("FILE TYPE:", file_type)
 
     try:
-        if file_type == "pdf":
-            text = load_pdf(file)
-        elif file_type == "docx":
-            text = load_docx(file)
-        elif file_type == "pptx":
-            text = load_pptx(file)
-        elif file_type == "csv":
-            text = load_csv(file)
-        elif file_type in ("image", "png", "jpg", "jpeg"):
-            text = load_image(file)
-        elif file_type == "json":
-            text = load_json(file)
-        else:
+        loader = SUPPORTED_FILE_TYPES.get(file_type.lower().strip())
+        if not loader:
             print("Unsupported file type:", file_type)
-            return 0
+            raise ValueError(f"Unsupported file type: {file_type}")
+        text = loader(file)
     except Exception as e:
         print("LOAD ERROR:", e)
-        return 0
+        raise ValueError(f"Could not extract text from {file_type}: {e}") from e
 
     print("TEXT LENGTH:", len(text) if text else 0)
 

@@ -7,18 +7,20 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from backend.auth.routes import get_current_user
-from backend.ingestion.pipeline import process_file
+from backend.ingestion.pipeline import SUPPORTED_FILE_TYPES, process_file
 from backend.rag.pipeline import rag
 from backend.utils.chat_history import load_history, save_history
 from backend.utils.chat_registry import create_chat, delete_chat, get_chats, rename_chat
-from backend.utils.file_metadata import add_file, get_files
-from backend.utils.logger import log_event
+from backend.utils.file_metadata import add_file, get_file_by_key, get_files
+from backend.utils.logger import load_events, log_event
 from backend.utils.metrics import load as load_metrics
 from backend.utils.metrics import log_error, log_query, log_upload
 
 
 router = APIRouter()
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
+UPLOAD_ROLES = {"admin", "manager", "analyst"}
+AUDIT_ROLES = {"admin", "manager"}
 
 
 class QueryRequest(BaseModel):
@@ -29,6 +31,11 @@ class QueryRequest(BaseModel):
 class RenameRequest(BaseModel):
     chat_id: str
     title: str
+
+
+class ProcessExistingFileRequest(BaseModel):
+    file_key: str
+    chat_id: str
 
 
 def tokenize(text):
@@ -87,34 +94,50 @@ async def upload_file(
     username = user["sub"].strip()
     role = user["role"].strip()
 
+    if role not in UPLOAD_ROLES:
+        raise HTTPException(status_code=403, detail="Your role cannot upload files")
+
     if not file_type:
         raise HTTPException(status_code=400, detail="file_type required")
 
     if not chat_id:
         raise HTTPException(status_code=400, detail="chat_id required")
 
-    temp_path = f"temp_{file.filename}"
+    file_type = file_type.lower().strip()
+    if file_type not in SUPPORTED_FILE_TYPES:
+        supported = ", ".join(sorted(t for t in SUPPORTED_FILE_TYPES if t != "image"))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file_type}'. Supported types: {supported}",
+        )
+
+    filename = os.path.basename(file.filename or "upload")
+    temp_path = os.path.join("uploads", f"temp_{username}_{chat_id}_{int(time.time() * 1000)}_{filename}")
 
     try:
+        os.makedirs("uploads", exist_ok=True)
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         save_dir = os.path.join("uploads", username, chat_id)
         os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, file.filename)
+        file_path = os.path.join(save_dir, filename)
 
         with open(temp_path, "rb") as temp_file:
             with open(file_path, "wb") as f:
                 shutil.copyfileobj(temp_file, f)
 
-        with open(file_path, "rb") as f:
-            chunks = process_file(
-                f,
-                file_type=file_type,
-                user_id=username,
-                chat_id=chat_id,
-                roles=[role],
-            )
+        try:
+            with open(file_path, "rb") as f:
+                chunks = process_file(
+                    f,
+                    file_type=file_type,
+                    user_id=username,
+                    chat_id=chat_id,
+                    roles=[role],
+                )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         if chunks <= 0:
             raise HTTPException(
@@ -122,11 +145,11 @@ async def upload_file(
                 detail="No text chunks were created. Check the file type/content and backend logs.",
             )
 
-        add_file(file.filename, username, role, chat_id, file_path)
+        add_file(filename, username, role, chat_id, file_path)
 
         latency_ms = (time.time() - start_time) * 1000
         log_upload(
-            file=file.filename,
+            file=filename,
             user=username,
             chat_id=chat_id,
             chunks=chunks,
@@ -134,7 +157,7 @@ async def upload_file(
         )
         log_event("upload", {
             "user": username,
-            "file": file.filename,
+            "file": filename,
             "chat_id": chat_id,
             "chunks": chunks,
             "latency_ms": round(latency_ms, 2),
@@ -142,7 +165,7 @@ async def upload_file(
 
         return {
             "message": "File processed",
-            "file": file.filename,
+            "file": filename,
             "chat_id": chat_id,
             "chunks": chunks,
             "latency_ms": round(latency_ms, 2),
@@ -154,7 +177,7 @@ async def upload_file(
             "type": "upload_http_error",
             "user": username,
             "chat_id": chat_id,
-            "file": file.filename,
+            "file": filename,
             "detail": str(e.detail),
         })
         raise
@@ -164,13 +187,106 @@ async def upload_file(
             "type": "upload_error",
             "user": username,
             "chat_id": chat_id,
-            "file": file.filename,
+            "file": filename,
             "detail": str(e),
         })
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+@router.get("/available-files")
+def available_files(user=Depends(get_current_user)):
+    files = [
+        item for item in get_files()
+        if not item.get("source_path")
+    ]
+    return {"files": files}
+
+
+@router.post("/process-existing-file")
+def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_current_user)):
+    username = user["sub"].strip()
+    role = user["role"].strip()
+
+    if not req.chat_id:
+        raise HTTPException(status_code=400, detail="chat_id required")
+
+    source = get_file_by_key(req.file_key)
+    if not source or source.get("source_path"):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    source_path = os.path.abspath(source.get("path", ""))
+    uploads_root = os.path.abspath("uploads")
+    if os.path.commonpath([source_path, uploads_root]) != uploads_root or not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="Stored file is missing")
+
+    existing = get_files(username, req.chat_id)
+    for item in existing:
+        if item.get("source_path", item.get("path")) == source.get("path"):
+            return {
+                "message": "File already ready for querying",
+                "file": source.get("file"),
+                "chat_id": req.chat_id,
+                "chunks": 0,
+                "already_processed": True,
+            }
+
+    file_type = str(source.get("file", "")).rsplit(".", 1)[-1].lower()
+    if file_type not in SUPPORTED_FILE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{file_type}'")
+
+    start_time = time.time()
+    try:
+        with open(source_path, "rb") as f:
+            chunks = process_file(
+                f,
+                file_type=file_type,
+                user_id=username,
+                chat_id=req.chat_id,
+                roles=[role],
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    if chunks <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No text chunks were created. Check the file type/content and backend logs.",
+        )
+
+    add_file(
+        source.get("file"),
+        username,
+        role,
+        req.chat_id,
+        source.get("path"),
+        source=source,
+    )
+
+    latency_ms = (time.time() - start_time) * 1000
+    log_event("file_selected", {
+        "user": username,
+        "role": role,
+        "chat_id": req.chat_id,
+        "file": source.get("file"),
+        "source_uploaded_by": source.get("uploaded_by"),
+        "source_chat_id": source.get("chat_id"),
+        "chunks": chunks,
+        "latency_ms": round(latency_ms, 2),
+    })
+
+    return {
+        "message": "File processed",
+        "file": source.get("file"),
+        "chat_id": req.chat_id,
+        "chunks": chunks,
+        "source_uploaded_by": source.get("uploaded_by"),
+        "latency_ms": round(latency_ms, 2),
+    }
 
 
 @router.post("/query")
@@ -286,6 +402,41 @@ def rename_chat_api(req: RenameRequest, user=Depends(get_current_user)):
 @router.get("/files")
 def list_files(chat_id: str, user=Depends(get_current_user)):
     return {"files": get_files(user["sub"].strip(), chat_id)}
+
+
+@router.get("/audit/files")
+def file_audit(user=Depends(get_current_user)):
+    if user["role"] not in AUDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    files = [
+        item for item in get_files()
+        if not item.get("source_path")
+    ]
+    return {"files": files}
+
+
+@router.get("/audit/queries")
+def query_audit(user=Depends(get_current_user)):
+    if user["role"] not in AUDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    events = load_events("query")
+    queries = []
+    for entry in reversed(events[-100:]):
+        data = entry.get("data", {}) or {}
+        queries.append({
+            "time": entry.get("time"),
+            "user": data.get("user"),
+            "chat_id": data.get("chat_id"),
+            "query": data.get("query"),
+            "retrieved_chunks": data.get("retrieved_chunks"),
+            "latency_ms": data.get("latency_ms", data.get("latency")),
+            "tokens": data.get("tokens"),
+            "error": data.get("error"),
+        })
+
+    return {"queries": queries}
 
 
 @router.get("/chat-history/{chat_id}")

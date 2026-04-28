@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 import requests
 import streamlit as st
@@ -7,6 +8,26 @@ import streamlit as st
 API_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000")
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
 ADMIN_ROLES = {"admin", "manager"}
+SUPPORTED_UPLOAD_TYPES = [
+    "pdf",
+    "docx",
+    "pptx",
+    "csv",
+    "json",
+    "txt",
+    "md",
+    "html",
+    "htm",
+    "xlsx",
+    "xls",
+    "png",
+    "jpg",
+    "jpeg",
+    "tif",
+    "tiff",
+    "bmp",
+    "webp",
+]
 
 DEFAULT_SESSION = {
     "page": "login",
@@ -101,6 +122,16 @@ def error_detail(response):
         return response.text or f"HTTP {response.status_code}"
 
 
+def format_time(timestamp):
+    if not timestamp:
+        return ""
+
+    try:
+        return datetime.fromtimestamp(float(timestamp)).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return ""
+
+
 def request(method, path, auth=True, timeout=60, **kwargs):
     headers = kwargs.pop("headers", {})
     if auth:
@@ -178,6 +209,55 @@ def load_files(chat_id):
         st.sidebar.warning("Could not load files.")
 
     return []
+
+
+def load_available_files():
+    try:
+        res = request("GET", "/available-files")
+        if res.status_code == 200:
+            return res.json().get("files", [])
+        st.sidebar.warning(f"Available files unavailable: {error_detail(res)}")
+    except requests.RequestException:
+        st.sidebar.warning("Could not load available files.")
+
+    return []
+
+
+def load_audit(path, key):
+    try:
+        res = request("GET", path)
+        if res.status_code == 200:
+            return res.json().get(key, [])
+        st.sidebar.warning(error_detail(res))
+    except requests.RequestException:
+        st.sidebar.warning("Could not load audit data.")
+
+    return []
+
+
+def process_available_file(file_item, chat_id):
+    try:
+        res = request(
+            "POST",
+            "/process-existing-file",
+            json={"file_key": file_item.get("file_key"), "chat_id": chat_id},
+            timeout=180,
+        )
+    except requests.RequestException:
+        st.sidebar.error("Backend not reachable.")
+        return
+
+    if res.status_code == 200:
+        data = res.json()
+        st.session_state.upload_notice = {
+            "file": data.get("file", file_item.get("file", "Selected file")),
+            "chunks": data.get("chunks", 0),
+            "chat_id": data.get("chat_id", chat_id),
+            "already_processed": data.get("already_processed", False),
+        }
+        st.rerun()
+
+    st.sidebar.error(f"Could not prepare file: {error_detail(res)}")
 
 
 def load_history(chat_id):
@@ -339,9 +419,59 @@ def sidebar(chats, chat_id):
             for item in files:
                 with st.container(border=True):
                     st.write(item.get("file", "Untitled file"))
-                    st.caption(f"{item.get('uploaded_by', '')} | {item.get('role', '')}")
+                    owner = item.get("source_uploaded_by") or item.get("uploaded_by", "")
+                    st.caption(f"{owner} | {item.get('role', '')}")
         else:
             st.caption("No documents in this chat.")
+
+        if st.session_state.role in {"viewer", "guest"}:
+            st.divider()
+            st.markdown("### Available Files")
+            available_files = load_available_files()
+
+            if available_files:
+                for item in available_files:
+                    key = f"use_file_{item.get('file_key')}_{chat_id}"
+                    with st.container(border=True):
+                        st.write(item.get("file", "Untitled file"))
+                        st.caption(
+                            f"Uploaded by {item.get('uploaded_by', '')} "
+                            f"({item.get('role', '')})"
+                        )
+                        if st.button("Use in this chat", key=key, use_container_width=True):
+                            process_available_file(item, chat_id)
+            else:
+                st.caption("No uploaded files are available yet.")
+
+        if st.session_state.role in ADMIN_ROLES:
+            st.divider()
+            st.markdown("### Audit")
+
+            with st.expander("Uploaded Files", expanded=False):
+                audit_files = load_audit("/audit/files", "files")
+                if audit_files:
+                    for item in audit_files[:25]:
+                        st.write(item.get("file", "Untitled file"))
+                        st.caption(
+                            f"{item.get('uploaded_by', '')} | "
+                            f"{item.get('role', '')} | "
+                            f"{item.get('chat_id', '')}"
+                        )
+                else:
+                    st.caption("No file records.")
+
+            with st.expander("Queries", expanded=False):
+                queries = load_audit("/audit/queries", "queries")
+                if queries:
+                    for item in queries[:25]:
+                        st.write(item.get("query", ""))
+                        st.caption(
+                            f"{item.get('user', '')} | "
+                            f"{item.get('chat_id', '')} | "
+                            f"{format_time(item.get('time'))}"
+                        )
+                else:
+                    st.caption("No query records.")
 
     return files
 
@@ -353,17 +483,20 @@ def upload_panel(chat_id):
     with st.expander("Ingestion", expanded=True):
         notice = st.session_state.upload_notice
         if notice:
-            st.success(
-                f"{notice['file']} indexed successfully. "
-                f"{notice['chunks']} chunks are available for retrieval in this chat."
-            )
+            if notice.get("already_processed"):
+                st.success(f"{notice['file']} is already ready for retrieval in this chat.")
+            else:
+                st.success(
+                    f"{notice['file']} indexed successfully. "
+                    f"{notice['chunks']} chunks are available for retrieval in this chat."
+                )
             if st.button("Clear ingestion message"):
                 st.session_state.upload_notice = None
                 st.rerun()
 
         uploaded_file = st.file_uploader(
             "File",
-            type=["pdf", "docx", "pptx", "csv", "png", "jpg", "jpeg", "json"],
+            type=SUPPORTED_UPLOAD_TYPES,
             key=st.session_state.uploaded_file_key,
         )
 
