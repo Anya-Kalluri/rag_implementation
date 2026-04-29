@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 
 from jose import JWTError, jwt
@@ -32,6 +33,11 @@ def refresh_users():
     fake_users_db.clear()
     fake_users_db.update(load_users())
 
+    if not fake_users_db:
+        bootstrap_admin_user()
+        fake_users_db.clear()
+        fake_users_db.update(load_users())
+
 
 def save_users():
     init_db()
@@ -45,6 +51,21 @@ def save_users():
                 """,
                 (username, user["password"], user["role"]),
             )
+
+
+def bootstrap_admin_user():
+    admin_username = os.getenv("ADMIN_USERNAME", "admin").strip()
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin").strip()
+
+    if not admin_username or not admin_password:
+        return
+
+    fake_users_db[admin_username] = {
+        "username": admin_username,
+        "password": hash_password(admin_password),
+        "role": "admin",
+    }
+    save_users()
 
 
 def hash_password(password: str):

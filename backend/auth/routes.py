@@ -3,7 +3,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from .auth import *
-from backend.auth.roles import can_manage  # 🔥 IMPORTANT
 
 
 router = APIRouter()
@@ -38,26 +37,6 @@ class LoginUser(BaseModel):
 
 
 # -------------------------------
-# SIGNUP
-# -------------------------------
-@router.post("/signup")
-def signup(user: SignupUser):
-
-    if user.username in fake_users_db:
-        raise HTTPException(status_code=400, detail="User already exists")
-
-    fake_users_db[user.username] = {
-        "username": user.username,
-        "password": hash_password(user.password),
-        "role": user.role
-    }
-
-    save_users()
-
-    return {"message": "User created successfully"}
-
-
-# -------------------------------
 # LOGIN
 # -------------------------------
 @router.post("/login")
@@ -86,15 +65,21 @@ def login(user: LoginUser):
 # 🔔 NOTIFICATIONS
 # -------------------------------
 # -------------------------------
-# 👑 CREATE USER (Admin + Manager)
+# 👑 CREATE USER (Admin only)
 # -------------------------------
+ALLOWED_USER_ROLES = {"manager", "analyst", "viewer", "guest"}
+
 @router.post("/create-user")
 def create_user(new_user: SignupUser, user=Depends(get_current_user)):
 
-    current_role = user["role"]
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can create users")
 
-    if not can_manage(current_role, new_user.role):
-        raise HTTPException(status_code=403, detail="Not allowed to create this role")
+    if new_user.role not in ALLOWED_USER_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Role must be one of: {', '.join(sorted(ALLOWED_USER_ROLES))}",
+        )
 
     if new_user.username in fake_users_db:
         raise HTTPException(status_code=400, detail="User exists")
@@ -102,7 +87,7 @@ def create_user(new_user: SignupUser, user=Depends(get_current_user)):
     fake_users_db[new_user.username] = {
         "username": new_user.username,
         "password": hash_password(new_user.password),
-        "role": new_user.role
+        "role": new_user.role,
     }
 
     save_users()
@@ -118,13 +103,13 @@ def delete_user(username: str, user=Depends(get_current_user)):
 
     current_role = user["role"]
 
+    if current_role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can delete users")
+
     target = fake_users_db.get(username)
 
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-
-    if not can_manage(current_role, target["role"]):
-        raise HTTPException(status_code=403, detail="Not allowed to delete this user")
 
     del fake_users_db[username]
     save_users()
@@ -140,8 +125,8 @@ def list_users(user=Depends(get_current_user)):
 
     role = user["role"]
 
-    if role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can list users")
 
     return {"users": fake_users_db}
 

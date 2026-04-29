@@ -7,7 +7,7 @@ import streamlit as st
 
 API_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000")
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
-ADMIN_ROLES = {"admin", "manager"}
+ADMIN_ROLES = {"admin"}
 SUPPORTED_UPLOAD_TYPES = [
     "pdf",
     "docx",
@@ -44,7 +44,6 @@ DEFAULT_SESSION = {
 
 ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/login", "Purpose": "Authenticate user and return JWT"},
-    {"Method": "POST", "Endpoint": "/signup", "Purpose": "Create account"},
     {"Method": "GET", "Endpoint": "/get-chats", "Purpose": "List chats for current user"},
     {"Method": "GET", "Endpoint": "/health", "Purpose": "System health monitoring"},
     {"Method": "POST", "Endpoint": "/create-chat", "Purpose": "Create a document chat workspace"},
@@ -56,9 +55,9 @@ ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/query", "Purpose": "Retrieve context and generate answer"},
     {"Method": "GET", "Endpoint": "/chat-history/{chat_id}", "Purpose": "Load saved conversation"},
     {"Method": "GET", "Endpoint": "/metrics", "Purpose": "Read telemetry counters"},
-    {"Method": "GET", "Endpoint": "/users", "Purpose": "Admin/manager user list"},
-    {"Method": "POST", "Endpoint": "/create-user", "Purpose": "Admin/manager user creation"},
-    {"Method": "DELETE", "Endpoint": "/delete-user/{username}", "Purpose": "Admin/manager user deletion"},
+    {"Method": "GET", "Endpoint": "/users", "Purpose": "Admin-only user list"},
+    {"Method": "POST", "Endpoint": "/create-user", "Purpose": "Admin-only user creation"},
+    {"Method": "DELETE", "Endpoint": "/delete-user/{username}", "Purpose": "Admin-only user deletion"},
 ]
 
 st.set_page_config(
@@ -313,46 +312,6 @@ def login_page():
                 st.rerun()
 
             st.error(error_detail(res))
-
-        if st.button("Create Account", use_container_width=True):
-            st.session_state.page = "signup"
-            st.rerun()
-
-
-def signup_page():
-    left, center, right = st.columns([1, 1.2, 1])
-    with center:
-        st.title("Create Account")
-
-        with st.form("signup_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            role = st.selectbox("Role", ["admin", "manager", "analyst", "viewer", "guest"])
-            submitted = st.form_submit_button("Signup", type="primary", use_container_width=True)
-
-        if submitted:
-            try:
-                res = request(
-                    "POST",
-                    "/signup",
-                    auth=False,
-                    json={"username": username.strip(), "password": password, "role": role},
-                    timeout=30,
-                )
-            except requests.RequestException:
-                st.error("Backend not reachable.")
-                return
-
-            if res.status_code == 200:
-                st.success("Account created.")
-                st.session_state.page = "login"
-                st.rerun()
-
-            st.error(error_detail(res))
-
-        if st.button("Back to Login", use_container_width=True):
-            st.session_state.page = "login"
-            st.rerun()
 
 
 def chat_controls(chat):
@@ -778,9 +737,7 @@ def chat_page():
     query_panel(chat_id, files)
 
 
-if st.session_state.page == "login":
-    login_page()
-elif st.session_state.page == "signup":
-    signup_page()
-elif st.session_state.page == "chat":
+if st.session_state.page == "chat":
     chat_page()
+else:
+    login_page()

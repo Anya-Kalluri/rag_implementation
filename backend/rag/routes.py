@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import time
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import AnyHttpUrl, BaseModel
@@ -414,22 +415,63 @@ def ingest_url(req: UrlIngestRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="chat_id required")
 
     try:
-        text = load_url(str(req.url))
-        if not text or not text.strip():
-            raise HTTPException(status_code=400, detail="No extractable text found at URL")
+        url_text = str(req.url)
+        file_type = ""
+        url_path = url_text.split("?", 1)[0].rstrip("/").lower()
 
-        chunks = process_text(
-            text=text,
-            user_id=username,
-            chat_id=req.chat_id,
-            roles=[role],
-            source_type="url",
-        )
+        if "." in url_path:
+            extension = url_path.rsplit(".", 1)[-1]
+            if extension in SUPPORTED_FILE_TYPES:
+                file_type = extension
+
+        response = load_url(url_text, return_response=True)
+        if response is None:
+            raise HTTPException(status_code=400, detail="Could not fetch URL content")
+
+        content_type = (response.headers.get("content-type", "") or "").lower()
+        if not file_type:
+            if "pdf" in content_type:
+                file_type = "pdf"
+            elif "word" in content_type or "officedocument" in content_type:
+                file_type = "docx"
+            elif "excel" in content_type or "spreadsheetml" in content_type:
+                file_type = "xlsx"
+            elif "powerpoint" in content_type:
+                file_type = "pptx"
+            elif "json" in content_type:
+                file_type = "json"
+            elif "html" in content_type or "text/" in content_type:
+                file_type = "html"
+
+        if file_type and file_type not in {"html", "htm"}:
+            content = response.content
+            if not content:
+                raise HTTPException(status_code=400, detail="No content found at URL")
+
+            chunks = process_file(
+                BytesIO(content),
+                file_type=file_type,
+                user_id=username,
+                chat_id=req.chat_id,
+                roles=[role],
+            )
+        else:
+            text = response.text
+            if not text or not text.strip():
+                raise HTTPException(status_code=400, detail="No extractable text found at URL")
+
+            chunks = process_text(
+                text=text,
+                user_id=username,
+                chat_id=req.chat_id,
+                roles=[role],
+                source_type="url",
+            )
 
         if chunks <= 0:
             raise HTTPException(status_code=400, detail="No text chunks were created from URL")
 
-        url_name = str(req.url)
+        url_name = url_text
         add_file(url_name, username, role, req.chat_id, url_name)
 
         latency_ms = (time.time() - start_time) * 1000

@@ -153,12 +153,15 @@ def load_xml(file):
     return "\n".join(texts)
 
 
-def load_url(url):
+def load_url(url, return_response=False):
     try:
         res = requests.get(url, timeout=10)
 
         if res.status_code != 200:
-            return ""
+            return None if return_response else ""
+
+        if return_response:
+            return res
 
         soup = BeautifulSoup(res.text, "html.parser")
 
@@ -170,5 +173,5 @@ def load_url(url):
 
         return text
 
-    except Exception as e:
-        return ""
+    except Exception:
+        return None if return_response else ""
