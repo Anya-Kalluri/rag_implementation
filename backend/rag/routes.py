@@ -9,7 +9,7 @@ from pydantic import AnyHttpUrl, BaseModel
 
 from backend.auth.routes import get_current_user
 from backend.ingestion.loaders import load_url
-from backend.ingestion.pipeline import SUPPORTED_FILE_TYPES, process_file, process_text
+from backend.ingestion.pipeline import SUPPORTED_FILE_TYPES, process_file
 from backend.rag.pipeline import rag
 from backend.utils.chat_history import load_history, save_history
 from backend.utils.chat_memory import prepare_chat_memory
@@ -81,6 +81,61 @@ def score_retrieval(query, chunks, answer):
             else 0.0
         ),
     }
+
+
+def is_url_source(path):
+    return str(path or "").lower().startswith(("http://", "https://"))
+
+
+def infer_url_file_type(url_text, response):
+    file_type = ""
+    url_path = url_text.split("?", 1)[0].rstrip("/").lower()
+
+    if "." in url_path:
+        extension = url_path.rsplit(".", 1)[-1]
+        if extension in SUPPORTED_FILE_TYPES:
+            file_type = extension
+
+    content_type = (response.headers.get("content-type", "") or "").lower()
+    if not file_type:
+        if "pdf" in content_type:
+            file_type = "pdf"
+        elif "word" in content_type or "officedocument" in content_type:
+            file_type = "docx"
+        elif "excel" in content_type or "spreadsheetml" in content_type:
+            file_type = "xlsx"
+        elif "powerpoint" in content_type:
+            file_type = "pptx"
+        elif "json" in content_type:
+            file_type = "json"
+        elif "html" in content_type or "text/" in content_type:
+            file_type = "html"
+
+    return file_type
+
+
+def process_url_for_chat(url_text, username, role, chat_id):
+    response = load_url(url_text, return_response=True)
+    if response is None:
+        raise HTTPException(status_code=400, detail="Could not fetch URL content")
+
+    file_type = infer_url_file_type(url_text, response) or "html"
+    content = response.content
+    if not content:
+        raise HTTPException(status_code=400, detail="No content found at URL")
+
+    chunks = process_file(
+        BytesIO(content),
+        file_type=file_type,
+        user_id=username,
+        chat_id=chat_id,
+        roles=[role],
+    )
+
+    if chunks <= 0:
+        raise HTTPException(status_code=400, detail="No text chunks were created from URL")
+
+    return chunks
 
 
 @router.get("/health")
@@ -226,11 +281,6 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
     if not source or source.get("source_path"):
         raise HTTPException(status_code=404, detail="File not found")
 
-    source_path = os.path.abspath(source.get("path", ""))
-    uploads_root = os.path.abspath("uploads")
-    if os.path.commonpath([source_path, uploads_root]) != uploads_root or not os.path.exists(source_path):
-        raise HTTPException(status_code=404, detail="Stored file is missing")
-
     existing = get_files(username, req.chat_id)
     for item in existing:
         if item.get("source_path", item.get("path")) == source.get("path"):
@@ -242,11 +292,57 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
                 "already_processed": True,
             }
 
+    start_time = time.time()
+    if is_url_source(source.get("path")):
+        try:
+            chunks = process_url_for_chat(source.get("path"), username, role, req.chat_id)
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        add_file(
+            source.get("file"),
+            username,
+            role,
+            req.chat_id,
+            source.get("path"),
+            source=source,
+        )
+
+        latency_ms = (time.time() - start_time) * 1000
+        log_event("file_selected", {
+            "user": username,
+            "role": role,
+            "chat_id": req.chat_id,
+            "file": source.get("file"),
+            "source_uploaded_by": source.get("uploaded_by"),
+            "source_chat_id": source.get("chat_id"),
+            "chunks": chunks,
+            "latency_ms": round(latency_ms, 2),
+            "source": "url",
+        })
+
+        return {
+            "message": "URL processed",
+            "file": source.get("file"),
+            "chat_id": req.chat_id,
+            "chunks": chunks,
+            "source_uploaded_by": source.get("uploaded_by"),
+            "latency_ms": round(latency_ms, 2),
+        }
+
+    source_path = os.path.abspath(source.get("path", ""))
+    uploads_root = os.path.abspath("uploads")
+    if os.path.commonpath([source_path, uploads_root]) != uploads_root or not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="Stored file is missing")
+
     file_type = str(source.get("file", "")).rsplit(".", 1)[-1].lower()
     if file_type not in SUPPORTED_FILE_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{file_type}'")
 
-    start_time = time.time()
     try:
         with open(source_path, "rb") as f:
             chunks = process_file(
@@ -430,61 +526,7 @@ def ingest_url(req: UrlIngestRequest, user=Depends(get_current_user)):
 
     try:
         url_text = str(req.url)
-        file_type = ""
-        url_path = url_text.split("?", 1)[0].rstrip("/").lower()
-
-        if "." in url_path:
-            extension = url_path.rsplit(".", 1)[-1]
-            if extension in SUPPORTED_FILE_TYPES:
-                file_type = extension
-
-        response = load_url(url_text, return_response=True)
-        if response is None:
-            raise HTTPException(status_code=400, detail="Could not fetch URL content")
-
-        content_type = (response.headers.get("content-type", "") or "").lower()
-        if not file_type:
-            if "pdf" in content_type:
-                file_type = "pdf"
-            elif "word" in content_type or "officedocument" in content_type:
-                file_type = "docx"
-            elif "excel" in content_type or "spreadsheetml" in content_type:
-                file_type = "xlsx"
-            elif "powerpoint" in content_type:
-                file_type = "pptx"
-            elif "json" in content_type:
-                file_type = "json"
-            elif "html" in content_type or "text/" in content_type:
-                file_type = "html"
-
-        if file_type and file_type not in {"html", "htm"}:
-            content = response.content
-            if not content:
-                raise HTTPException(status_code=400, detail="No content found at URL")
-
-            chunks = process_file(
-                BytesIO(content),
-                file_type=file_type,
-                user_id=username,
-                chat_id=req.chat_id,
-                roles=[role],
-            )
-        else:
-            text = response.text
-            if not text or not text.strip():
-                raise HTTPException(status_code=400, detail="No extractable text found at URL")
-
-            chunks = process_text(
-                text=text,
-                user_id=username,
-                chat_id=req.chat_id,
-                roles=[role],
-                source_type="url",
-            )
-
-        if chunks <= 0:
-            raise HTTPException(status_code=400, detail="No text chunks were created from URL")
-
+        chunks = process_url_for_chat(url_text, username, role, req.chat_id)
         url_name = url_text
         add_file(url_name, username, role, req.chat_id, url_name)
 
