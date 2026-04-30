@@ -15,3 +15,4 @@ TESSERACT_CMD = os.getenv("TESSERACT_CMD")
 REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
 CHAT_SUMMARY_THRESHOLD = int(os.getenv("CHAT_SUMMARY_THRESHOLD", 5))
 IMAGE_OCR_MODEL = os.getenv("IMAGE_OCR_MODEL") or "llama-3.2-11b-vision-preview"
+GUEST_QUERY_LIMIT = int(os.getenv("GUEST_QUERY_LIMIT", 5))

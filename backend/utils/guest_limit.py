@@ -1,11 +1,15 @@
 from datetime import datetime
 
 from backend.db import connect, init_db
+from backend.config.settings import GUEST_QUERY_LIMIT
 
 
-def check_limit(username, limit=5):
+def check_limit(username, limit=None):
     init_db()
     today = datetime.now().strftime("%Y-%m-%d")
+
+    if limit is None:
+        limit = GUEST_QUERY_LIMIT
 
     with connect() as conn:
         row = conn.execute(
