@@ -8,6 +8,9 @@ import streamlit as st
 API_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000")
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
 ADMIN_ROLES = {"admin"}
+USER_MANAGEMENT_ROLES = {"admin", "manager"}
+MANAGER_MANAGED_ROLES = ["analyst", "viewer", "guest"]
+ADMIN_MANAGED_ROLES = ["manager", "analyst", "viewer", "guest"]
 SUPPORTED_UPLOAD_TYPES = [
     "pdf",
     "docx",
@@ -117,9 +120,39 @@ def auth_headers():
 def error_detail(response):
     try:
         detail = response.json().get("detail")
+        if isinstance(detail, dict):
+            return (
+                detail.get("message")
+                or detail.get("detail")
+                or response.text
+                or f"HTTP {response.status_code}"
+            )
         return detail or response.text or f"HTTP {response.status_code}"
     except Exception:
         return response.text or f"HTTP {response.status_code}"
+
+
+def guest_query_notice(guest_usage):
+    if not guest_usage:
+        return ""
+
+    used = guest_usage.get("used", 0)
+    limit = guest_usage.get("limit", 5)
+    remaining = guest_usage.get("remaining", max(limit - used, 0))
+    if remaining <= 0:
+        return f"Guest query {used} of {limit} used. No more guest queries available."
+    return f"Guest query {used} of {limit} used. {remaining} guest queries remaining."
+
+
+def error_guest_usage(response):
+    try:
+        detail = response.json().get("detail")
+    except Exception:
+        return None
+
+    if isinstance(detail, dict):
+        return detail.get("guest_usage")
+    return None
 
 
 def format_time(timestamp):
@@ -233,6 +266,24 @@ def load_audit(path, key):
         st.sidebar.warning("Could not load audit data.")
 
     return []
+
+
+def load_users(show_errors=True):
+    try:
+        res = request("GET", "/users")
+    except requests.RequestException:
+        if show_errors:
+            st.error("Could not load users. Backend is not reachable.")
+        return {}
+
+    if res.status_code == 200:
+        users = res.json().get("users", {})
+        st.session_state.users = users
+        return users
+
+    if show_errors:
+        st.error(error_detail(res))
+    return {}
 
 
 def process_available_file(file_item, chat_id):
@@ -549,6 +600,10 @@ def render_history():
                     col5.metric("Recall Proxy", telemetry.get("retrieval_recall_proxy", 0))
                     col6.metric("Relevance", telemetry.get("response_relevance", 0))
 
+            notice = guest_query_notice(message.get("guest_usage"))
+            if notice:
+                st.info(notice)
+
 
 def query_panel(chat_id, files):
     query = st.chat_input("Ask a question about the indexed documents")
@@ -583,38 +638,60 @@ def query_panel(chat_id, files):
             "content": data.get("answer", "No response generated."),
             "sources": data.get("sources", []),
             "telemetry": data.get("telemetry", {}),
+            "guest_usage": data.get("guest_usage"),
         })
     else:
+        guest_usage = error_guest_usage(res)
+        detail = error_detail(res)
+        if guest_usage:
+            detail = "No more guest queries available."
         st.session_state.history.append({
             "role": "assistant",
-            "content": f"Query failed: {error_detail(res)}",
+            "content": f"Query failed: {detail}",
             "sources": [],
+            "guest_usage": guest_usage,
         })
 
     st.rerun()
 
 
 def admin_panel():
-    if st.session_state.role not in ADMIN_ROLES:
+    if st.session_state.role not in USER_MANAGEMENT_ROLES:
         return
 
-    with st.expander("Admin", expanded=False):
+    title = "Admin" if st.session_state.role == "admin" else "Manager Dashboard"
+    manageable_roles = (
+        ADMIN_MANAGED_ROLES
+        if st.session_state.role == "admin"
+        else MANAGER_MANAGED_ROLES
+    )
+
+    with st.expander(title, expanded=False):
         user_tab, telemetry_tab = st.tabs(["Users", "Telemetry"])
 
         with user_tab:
+            st.caption(
+                "Managers can view, create, and delete analyst, viewer, and guest users."
+                if st.session_state.role == "manager"
+                else "Admins can manage managers, analysts, viewers, and guests."
+            )
+
+            if not st.session_state.users:
+                load_users(show_errors=False)
+
             if st.button("Refresh Users"):
-                res = request("GET", "/users")
-                if res.status_code == 200:
-                    st.session_state.users = res.json().get("users", {})
-                else:
-                    st.error(error_detail(res))
+                load_users()
 
             for username, data in st.session_state.users.items():
+                role = data.get("role", "")
                 col1, col2 = st.columns([4, 1])
-                col1.write(f"{username} ({data.get('role', '')})")
-                if col2.button("Delete", key=f"delete_user_{username}"):
+                col1.write(f"{username} ({role})")
+                can_delete = role in manageable_roles and username != st.session_state.username
+                if col2.button("Delete", key=f"delete_user_{username}", disabled=not can_delete):
                     res = request("DELETE", f"/delete-user/{username}", timeout=30)
                     if res.status_code == 200:
+                        st.success("User deleted.")
+                        load_users(show_errors=False)
                         st.rerun()
                     st.error(error_detail(res))
 
@@ -622,7 +699,7 @@ def admin_panel():
             with st.form("create_user_form"):
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
-                new_role = st.selectbox("Role", ["manager", "analyst", "viewer", "guest"])
+                new_role = st.selectbox("Role", manageable_roles)
                 submitted = st.form_submit_button("Create User")
 
             if submitted:
@@ -637,6 +714,8 @@ def admin_panel():
                 )
                 if res.status_code == 200:
                     st.success("User created.")
+                    load_users(show_errors=False)
+                    st.rerun()
                 else:
                     st.error(error_detail(res))
 

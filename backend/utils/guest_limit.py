@@ -4,7 +4,7 @@ from backend.db import connect, init_db
 from backend.config.settings import GUEST_QUERY_LIMIT
 
 
-def check_limit(username, limit=None):
+def consume_query(username, limit=None):
     init_db()
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -23,7 +23,14 @@ def check_limit(username, limit=None):
             count = int(row["count"] or 0)
 
         if count >= limit:
-            return False
+            return {
+                "allowed": False,
+                "used": count,
+                "remaining": 0,
+                "limit": limit,
+            }
+
+        count += 1
 
         conn.execute(
             """
@@ -33,7 +40,16 @@ def check_limit(username, limit=None):
                 count = excluded.count,
                 date = excluded.date
             """,
-            (username, count + 1, today),
+            (username, count, today),
         )
 
-    return True
+    return {
+        "allowed": True,
+        "used": count,
+        "remaining": max(limit - count, 0),
+        "limit": limit,
+    }
+
+
+def check_limit(username, limit=None):
+    return consume_query(username, limit)["allowed"]

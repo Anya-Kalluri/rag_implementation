@@ -302,6 +302,7 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
 def query_rag(req: QueryRequest, user=Depends(get_current_user)):
     username = user["sub"].strip()
     role = user["role"].strip()
+    guest_usage = None
 
     if not req.query:
         raise HTTPException(status_code=400, detail="Query required")
@@ -313,10 +314,17 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again shortly.")
 
     if role == "guest":
-        from backend.utils.guest_limit import check_limit
+        from backend.utils.guest_limit import consume_query
 
-        if not check_limit(username):
-            raise HTTPException(status_code=403, detail="Guest query limit reached")
+        guest_usage = consume_query(username)
+        if not guest_usage["allowed"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "message": "No more guest queries available.",
+                    "guest_usage": guest_usage,
+                },
+            )
 
     try:
         history = load_history(username, req.chat_id) or []
@@ -363,7 +371,7 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
         })
 
         history.append({"role": "user", "content": req.query})
-        history.append({
+        assistant_message = {
             "role": "assistant",
             "content": answer,
             "sources": [c["text"][:200] for c in chunks],
@@ -381,14 +389,20 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
                 "retrieval_recall_proxy": round(evaluation["retrieval_recall_proxy"], 4),
                 "response_relevance": round(evaluation["response_relevance"], 4),
             },
-        })
+        }
+        if guest_usage:
+            assistant_message["guest_usage"] = guest_usage
+        history.append(assistant_message)
         save_history(username, req.chat_id, history)
 
-        return {
+        response = {
             "answer": answer,
             "sources": [c["text"][:300] for c in chunks],
             "telemetry": history[-1]["telemetry"],
         }
+        if guest_usage:
+            response["guest_usage"] = guest_usage
+        return response
 
     except Exception as e:
         log_error("query_error", str(e))
