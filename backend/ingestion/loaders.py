@@ -1,4 +1,3 @@
-import fitz
 from docx import Document
 from pptx import Presentation
 import pandas as pd
@@ -20,10 +19,52 @@ if TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 
-def load_pdf(file):
-    doc = fitz.open(stream=file.read(), filetype="pdf")
-    return " ".join([p.get_text() for p in doc])
+def _load_pdf_with_pypdf(file):
+    from pypdf import PdfReader
 
+    file.seek(0)
+    reader = PdfReader(file)
+    text = []
+    for page in reader.pages:
+        page_text = page.extract_text() or ""
+        if page_text.strip():
+            text.append(page_text)
+    return "\n".join(text)
+
+
+def _open_pdf(file):
+    try:
+        import fitz
+    except ImportError as e:
+        raise RuntimeError(
+            "PDF extraction is unavailable because PyMuPDF could not be loaded. "
+            "On this machine, Windows Application Control appears to be blocking "
+            "PyMuPDF's native DLL. Allow or reinstall PyMuPDF, or use another file type."
+        ) from e
+
+    return fitz.open(stream=file.read(), filetype="pdf")
+
+
+def load_pdf(file):
+    try:
+        text = _load_pdf_with_pypdf(file)
+        if text.strip():
+            return text
+    except Exception as pypdf_error:
+        file.seek(0)
+        try:
+            with _open_pdf(file) as doc:
+                return " ".join([p.get_text() for p in doc])
+        except Exception as pymupdf_error:
+            raise RuntimeError(
+                "PDF extraction failed with both pypdf and PyMuPDF. "
+                f"pypdf error: {pypdf_error}; PyMuPDF error: {pymupdf_error}"
+            ) from pymupdf_error
+
+    raise RuntimeError(
+        "PDF text extraction returned no text. The PDF may be scanned or image-only; "
+        "try OCR/image ingestion for scanned documents."
+    )
 
 def load_docx(file):
     doc = Document(file)

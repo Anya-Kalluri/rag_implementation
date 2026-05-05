@@ -8,9 +8,10 @@ def get_model():
     global model
 
     if model is None:
-        model = SentenceTransformer(MODEL_NAME)
+        model = SentenceTransformer(MODEL_NAME, local_files_only=True)
 
     return model
+
 
 def get_embeddings(texts):
     return get_model().encode(texts)

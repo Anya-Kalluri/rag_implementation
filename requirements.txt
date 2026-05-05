@@ -8,6 +8,7 @@ faiss-cpu
 sentence-transformers
 rank-bm25
 pymupdf
+pypdf
 python-docx
 python-pptx
 pandas
