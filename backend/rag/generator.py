@@ -1,23 +1,107 @@
-from groq import Groq
-from backend.config.settings import GROQ_API_KEY
+from backend.config.settings import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_PROVIDER,
+    RAG_LLM_MODEL,
+    RAG_LLM_MODEL_EXPLICIT,
+)
 from backend.rag.prompt_loader import render_prompt
 
-client = None
+llm_clients = {}
+OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai",
+    "openai-compatible",
+    "openrouter",
+    "together",
+    "fireworks",
+    "deepseek",
+    "xai",
+}
 
 
-def get_client():
-    global client
-
-    if not GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is missing. Check your .env file.")
-
-    if client is None:
-        client = Groq(api_key=GROQ_API_KEY)
-
-    return client
+def _missing_package_error(provider, package):
+    return RuntimeError(
+        f"LLM_PROVIDER='{provider}' requires the '{package}' package. "
+        "Install dependencies with: pip install -r requirements.txt"
+    )
 
 
-def _empty_metrics(model="llama-3.1-8b-instant"):
+def _chat_model_class(provider):
+    if provider == "groq":
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as e:
+            raise _missing_package_error(provider, "langchain-groq") from e
+
+        return ChatGroq
+
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError as e:
+            raise _missing_package_error(provider, "langchain-openai") from e
+
+        return ChatOpenAI
+
+    if provider == "anthropic":
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError as e:
+            raise _missing_package_error(provider, "langchain-anthropic") from e
+
+        return ChatAnthropic
+
+    if provider in {"google", "gemini"}:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError as e:
+            raise _missing_package_error(provider, "langchain-google-genai") from e
+
+        return ChatGoogleGenerativeAI
+
+    supported = "groq, openai, anthropic, google, openai-compatible"
+    raise RuntimeError(f"Unsupported LLM_PROVIDER='{provider}'. Use one of: {supported}.")
+
+
+def _chat_model_kwargs(provider, model, temperature):
+    kwargs = {
+        "api_key": LLM_API_KEY,
+        "model": model,
+        "temperature": temperature,
+    }
+
+    if provider in OPENAI_COMPATIBLE_PROVIDERS and provider != "openai":
+        if not LLM_BASE_URL:
+            raise RuntimeError(
+                f"LLM_PROVIDER='{provider}' requires LLM_BASE_URL. "
+                "Set the provider's OpenAI-compatible API base URL in .env."
+            )
+        if not RAG_LLM_MODEL_EXPLICIT:
+            raise RuntimeError(
+                f"LLM_PROVIDER='{provider}' requires RAG_LLM_MODEL. "
+                "Set the exact model name expected by that provider."
+            )
+        kwargs["base_url"] = LLM_BASE_URL
+    elif provider == "openai" and LLM_BASE_URL:
+        kwargs["base_url"] = LLM_BASE_URL
+
+    return kwargs
+
+
+def get_llm(temperature=0.2, model=RAG_LLM_MODEL):
+    provider = LLM_PROVIDER
+    if not LLM_API_KEY:
+        raise RuntimeError("LLM_API_KEY is missing. Check your .env file.")
+
+    cache_key = (provider, model, temperature, LLM_BASE_URL)
+    if cache_key not in llm_clients:
+        chat_model = _chat_model_class(provider)
+        llm_clients[cache_key] = chat_model(**_chat_model_kwargs(provider, model, temperature))
+
+    return llm_clients[cache_key]
+
+
+def _empty_metrics(model=RAG_LLM_MODEL):
     return {
         "model": model,
         "prompt_tokens": 0,
@@ -27,12 +111,27 @@ def _empty_metrics(model="llama-3.1-8b-instant"):
     }
 
 
-def _record_usage(metrics, response):
-    usage = getattr(response, "usage", None)
+def _record_usage(metrics, message):
+    usage = getattr(message, "usage_metadata", None) or {}
     if usage:
-        metrics["prompt_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
-        metrics["completion_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
-        metrics["total_tokens"] = int(getattr(usage, "total_tokens", 0) or 0)
+        metrics["prompt_tokens"] = int(usage.get("input_tokens", 0) or 0)
+        metrics["completion_tokens"] = int(usage.get("output_tokens", 0) or 0)
+        metrics["total_tokens"] = int(usage.get("total_tokens", 0) or 0)
+        return
+
+    response_metadata = getattr(message, "response_metadata", None) or {}
+    token_usage = response_metadata.get("token_usage") or {}
+    if token_usage:
+        metrics["prompt_tokens"] = int(token_usage.get("prompt_tokens", 0) or 0)
+        metrics["completion_tokens"] = int(token_usage.get("completion_tokens", 0) or 0)
+        metrics["total_tokens"] = int(token_usage.get("total_tokens", 0) or 0)
+
+
+def _message_content(message):
+    content = getattr(message, "content", "")
+    if isinstance(content, list):
+        return "".join(str(part.get("text", part)) if isinstance(part, dict) else str(part) for part in content)
+    return content or ""
 
 
 def summarize_chat_messages(messages, existing_summary=""):
@@ -60,14 +159,10 @@ def summarize_chat_messages(messages, existing_summary=""):
     )
 
     try:
-        res = get_client().chat.completions.create(
-            model=metrics["model"],
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-        )
-        _record_usage(metrics, res)
+        message = get_llm(temperature=0.1, model=metrics["model"]).invoke(prompt)
+        _record_usage(metrics, message)
 
-        summary = res.choices[0].message.content
+        summary = _message_content(message)
         return (summary or existing_summary or "").strip(), metrics
     except Exception as e:
         print("SUMMARY ERROR:", str(e))
@@ -76,13 +171,7 @@ def summarize_chat_messages(messages, existing_summary=""):
 
 
 def generate(query, chunks, chat_summary=""):
-    metrics = {
-        "model": "llama-3.1-8b-instant",
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "total_tokens": 0,
-        "error": None,
-    }
+    metrics = _empty_metrics()
 
     # -------------------------------
     # SAFETY: NO CONTEXT
@@ -104,15 +193,10 @@ def generate(query, chunks, chat_summary=""):
     )
 
     try:
-        res = get_client().chat.completions.create(
-            model=metrics["model"],
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
-        )
+        message = get_llm(temperature=0.2, model=metrics["model"]).invoke(prompt)
+        _record_usage(metrics, message)
 
-        _record_usage(metrics, res)
-
-        answer = res.choices[0].message.content
+        answer = _message_content(message)
 
         if not answer:
             return "No response generated.", metrics

@@ -18,6 +18,11 @@ pytesseract
 Pillow
 streamlit
 groq
+langchain
+langchain-anthropic
+langchain-google-genai
+langchain-groq
+langchain-openai
 jinja2
 openpyxl
 xlrd
