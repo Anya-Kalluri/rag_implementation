@@ -1,7 +1,11 @@
 import re
+from typing import Any
 
 import numpy as np
-from rank_bm25 import BM25Okapi
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from pydantic import ConfigDict, Field
 
 from backend.db import connect, decode, init_db
 from backend.vector_index import read_index
@@ -71,21 +75,6 @@ def normalize_scores(scores):
     return (scores - min_score) / (max_score - min_score)
 
 
-def build_bm25_scores(query, texts):
-    try:
-        tokenized_texts = [tokenize(text) for text in texts]
-        tokenized_query = tokenize(query)
-
-        if not tokenized_query or not any(tokenized_texts):
-            return np.zeros(len(texts), dtype="float32")
-
-        bm25 = BM25Okapi(tokenized_texts)
-        return normalize_scores(bm25.get_scores(tokenized_query))
-    except Exception as e:
-        print("BM25 ERROR:", e)
-        return np.zeros(len(texts), dtype="float32")
-
-
 def build_query_embedding(query, expected_dim=None):
     try:
         from backend.ingestion.embeddings import get_embeddings
@@ -107,6 +96,200 @@ def build_query_embedding(query, expected_dim=None):
         return None
 
     return q_emb
+
+
+def _documents_from_meta(meta):
+    documents = []
+    for pos, item in enumerate(meta):
+        if not isinstance(item, dict):
+            continue
+
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+
+        documents.append(
+            Document(
+                page_content=text,
+                metadata={
+                    "id": item.get("id"),
+                    "roles": item.get("roles", []),
+                    "meta_index": pos,
+                },
+            )
+        )
+
+    return documents
+
+
+class FaissSemanticRetriever(BaseRetriever):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    index: Any = None
+    documents: list[Document] = Field(default_factory=list)
+    k: int = 20
+
+    def _get_relevant_documents(self, query, *, run_manager=None):
+        if self.index is None or getattr(self.index, "ntotal", 0) <= 0:
+            return []
+
+        expected_dim = getattr(self.index, "d", None)
+        q_emb = build_query_embedding(query, expected_dim)
+        if q_emb is None:
+            return []
+
+        try:
+            search_k = min(max(self.k, 1), self.index.ntotal)
+            distances, indices = self.index.search(q_emb, search_k)
+        except Exception as e:
+            print("FAISS SEARCH ERROR:", e)
+            return []
+
+        by_meta_index = {
+            int(doc.metadata.get("meta_index")): doc
+            for doc in self.documents
+            if doc.metadata.get("meta_index") is not None
+        }
+
+        hits = []
+        raw_scores = []
+        for rank, idx in enumerate(indices[0]):
+            idx = int(idx)
+            doc = by_meta_index.get(idx)
+            if doc is None:
+                continue
+
+            distance = float(distances[0][rank])
+            if not np.isfinite(distance):
+                continue
+
+            score = 1.0 / (1.0 + max(distance, 0.0))
+            raw_scores.append(score)
+            hits.append((doc, score))
+
+        normalized = normalize_scores(raw_scores)
+        results = []
+        for (doc, raw_score), semantic_score in zip(hits, normalized):
+            copied = Document(page_content=doc.page_content, metadata=dict(doc.metadata))
+            copied.metadata["semantic_score"] = float(semantic_score)
+            copied.metadata["semantic_raw_score"] = float(raw_score)
+            results.append(copied)
+
+        return results
+
+
+class LangChainBM25RankRetriever(BaseRetriever):
+    documents: list[Document] = Field(default_factory=list)
+    k: int = 20
+
+    def _get_relevant_documents(self, query, *, run_manager=None):
+        query_tokens = set(tokenize(query))
+        if not self.documents or not query_tokens:
+            return []
+
+        try:
+            retriever = BM25Retriever.from_documents(
+                self.documents,
+                k=min(max(self.k, 1), len(self.documents)),
+                preprocess_func=tokenize,
+            )
+            ranked_docs = retriever.invoke(query)
+        except Exception as e:
+            print("BM25 ERROR:", e)
+            return []
+
+        results = []
+        total = max(len(ranked_docs), 1)
+        for rank, doc in enumerate(ranked_docs):
+            copied = Document(page_content=doc.page_content, metadata=dict(doc.metadata))
+            doc_tokens = set(tokenize(doc.page_content))
+            overlap_score = len(query_tokens & doc_tokens) / max(len(query_tokens), 1)
+            rank_score = (total - rank) / total
+            copied.metadata["lexical_score"] = float(max(overlap_score, 0.5 * rank_score))
+            results.append(copied)
+
+        return sorted(results, key=lambda doc: doc.metadata.get("lexical_score", 0.0), reverse=True)
+
+
+class HybridRetriever(BaseRetriever):
+    semantic_retriever: BaseRetriever | None = None
+    keyword_retriever: BaseRetriever
+    semantic_weight: float = 0.75
+    keyword_weight: float = 0.25
+    k: int = 5
+
+    def _get_relevant_documents(self, query, *, run_manager=None):
+        semantic_docs = []
+        if self.semantic_retriever is not None:
+            semantic_docs = self.semantic_retriever.invoke(query)
+
+        keyword_docs = self.keyword_retriever.invoke(query)
+        candidates = {}
+
+        def add_doc(doc, score_key):
+            doc_key = doc.metadata.get("id") or " ".join(doc.page_content.split()).lower()
+            current = candidates.get(doc_key)
+            if current is None:
+                current = Document(page_content=doc.page_content, metadata=dict(doc.metadata))
+                candidates[doc_key] = current
+
+            score = float(doc.metadata.get(score_key, 0.0) or 0.0)
+            current.metadata[score_key] = max(float(current.metadata.get(score_key, 0.0) or 0.0), score)
+
+        for doc in semantic_docs:
+            add_doc(doc, "semantic_score")
+
+        for doc in keyword_docs:
+            add_doc(doc, "lexical_score")
+
+        if not candidates:
+            return []
+
+        results = []
+        for doc in candidates.values():
+            semantic_score = float(doc.metadata.get("semantic_score", 0.0) or 0.0)
+            lexical_score = float(doc.metadata.get("lexical_score", 0.0) or 0.0)
+            if semantic_docs:
+                score = self.semantic_weight * semantic_score + self.keyword_weight * lexical_score
+            else:
+                score = lexical_score
+
+            doc.metadata["score"] = float(score)
+            results.append(doc)
+
+        return sorted(results, key=lambda doc: doc.metadata.get("score", 0.0), reverse=True)
+
+
+class OverlapReranker(BaseRetriever):
+    base_retriever: BaseRetriever
+    k: int = 5
+
+    def _get_relevant_documents(self, query, *, run_manager=None):
+        docs = self.base_retriever.invoke(query)
+        query_words = set(tokenize(query))
+
+        for doc in docs:
+            text_words = set(tokenize(doc.page_content))
+            overlap = len(query_words & text_words)
+            doc.metadata["rerank_score"] = float(doc.metadata.get("score", 0.0) or 0.0) + 0.05 * overlap
+
+        return sorted(
+            docs,
+            key=lambda doc: doc.metadata.get("rerank_score", doc.metadata.get("score", 0.0)),
+            reverse=True,
+        )[: self.k]
+
+
+def _doc_to_result(doc):
+    return {
+        "id": doc.metadata.get("id"),
+        "text": doc.page_content,
+        "roles": doc.metadata.get("roles", []),
+        "score": float(doc.metadata.get("score", 0.0) or 0.0),
+        "semantic_score": float(doc.metadata.get("semantic_score", 0.0) or 0.0),
+        "lexical_score": float(doc.metadata.get("lexical_score", 0.0) or 0.0),
+        "rerank_score": float(doc.metadata.get("rerank_score", doc.metadata.get("score", 0.0)) or 0.0),
+    }
 
 
 def rerank(query, docs):
@@ -154,94 +337,34 @@ def retrieve(query, role, user, chat, k=5):
         print("NO META")
         return []
 
-    valid_meta = []
-    for pos, item in enumerate(meta):
-        if not isinstance(item, dict):
-            continue
+    documents = _documents_from_meta(meta)
 
-        text = str(item.get("text", "")).strip()
-        if not text:
-            continue
-
-        item_copy = item.copy()
-        item_copy["_meta_index"] = pos
-        valid_meta.append(item_copy)
-
-    if not valid_meta:
+    if not documents:
         print("NO VALID TEXT CHUNKS")
         return []
 
-    texts = [m["text"] for m in valid_meta]
-    bm25_scores = build_bm25_scores(query, texts)
-
-    candidate_scores = {}
-
-    if index is not None and index.ntotal > 0:
-        expected_dim = getattr(index, "d", None)
-        q_emb = build_query_embedding(query, expected_dim)
-
-        if q_emb is not None:
-            try:
-                search_k = min(max(k * 4, k), index.ntotal)
-                distances, indices = index.search(q_emb, search_k)
-
-                semantic_hits = []
-                for rank, idx in enumerate(indices[0]):
-                    idx = int(idx)
-                    if idx < 0 or idx >= len(meta):
-                        continue
-
-                    distance = float(distances[0][rank])
-                    if not np.isfinite(distance):
-                        continue
-
-                    semantic_hits.append((idx, 1.0 / (1.0 + max(distance, 0.0))))
-
-                semantic_values = normalize_scores([score for _, score in semantic_hits])
-
-                meta_to_valid = {m["_meta_index"]: i for i, m in enumerate(valid_meta)}
-                for (meta_idx, _), semantic_score in zip(semantic_hits, semantic_values):
-                    valid_idx = meta_to_valid.get(meta_idx)
-                    if valid_idx is None:
-                        continue
-
-                    candidate_scores[valid_idx] = max(
-                        candidate_scores.get(valid_idx, 0.0),
-                        0.75 * float(semantic_score) + 0.25 * float(bm25_scores[valid_idx]),
-                    )
-            except Exception as e:
-                print("FAISS SEARCH ERROR:", e)
+    search_k = max(k * 4, k)
+    semantic_retriever = None
+    if index is not None and getattr(index, "ntotal", 0) > 0:
+        semantic_retriever = FaissSemanticRetriever(index=index, documents=documents, k=search_k)
     else:
         print("NO FAISS INDEX; USING BM25 ONLY")
 
-    # Always add lexical candidates so retrieval still works if FAISS fails,
-    # returns no usable ids, or misses exact document wording.
-    lexical_order = np.argsort(-bm25_scores)[: max(k * 4, k)]
-    for valid_idx in lexical_order:
-        lexical_score = float(bm25_scores[valid_idx])
-        if lexical_score <= 0 and candidate_scores:
-            continue
+    keyword_retriever = LangChainBM25RankRetriever(documents=documents, k=search_k)
+    hybrid_retriever = HybridRetriever(
+        semantic_retriever=semantic_retriever,
+        keyword_retriever=keyword_retriever,
+        k=search_k,
+    )
+    reranking_retriever = OverlapReranker(base_retriever=hybrid_retriever, k=k)
+    results = [_doc_to_result(doc) for doc in reranking_retriever.invoke(query)]
 
-        candidate_scores[int(valid_idx)] = max(
-            candidate_scores.get(int(valid_idx), 0.0),
-            lexical_score,
-        )
-
-    if not candidate_scores:
+    if not results:
         print("NO SCORED CANDIDATES; RETURNING FIRST CHUNKS")
-        candidate_scores = {i: 0.0 for i in range(min(k, len(valid_meta)))}
-
-    results = []
-    for valid_idx, score in candidate_scores.items():
-        doc = valid_meta[valid_idx].copy()
-        doc.pop("_meta_index", None)
-        doc["score"] = float(score)
-        results.append(doc)
-
-    results = unique_docs(rerank(query, results), k)
+        results = [_doc_to_result(doc) for doc in documents[:k]]
 
     print("META LENGTH:", len(meta))
-    print("VALID TEXT CHUNKS:", len(valid_meta))
+    print("VALID TEXT CHUNKS:", len(documents))
     print("FINAL RETURN:", len(results))
     print("==================================\n")
 

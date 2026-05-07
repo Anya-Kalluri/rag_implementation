@@ -1,3 +1,5 @@
+from langchain_core.output_parsers import StrOutputParser
+
 from backend.config.settings import (
     LLM_API_KEY,
     LLM_BASE_URL,
@@ -8,6 +10,7 @@ from backend.config.settings import (
 from backend.rag.prompt_loader import render_prompt
 
 llm_clients = {}
+output_parser = StrOutputParser()
 OPENAI_COMPATIBLE_PROVIDERS = {
     "openai",
     "openai-compatible",
@@ -128,10 +131,7 @@ def _record_usage(metrics, message):
 
 
 def _message_content(message):
-    content = getattr(message, "content", "")
-    if isinstance(content, list):
-        return "".join(str(part.get("text", part)) if isinstance(part, dict) else str(part) for part in content)
-    return content or ""
+    return output_parser.invoke(message)
 
 
 def summarize_chat_messages(messages, existing_summary=""):

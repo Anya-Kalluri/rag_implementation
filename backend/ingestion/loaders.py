@@ -19,6 +19,85 @@ if TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 
+def _rapidocr_image(image):
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+    except Exception as e:
+        raise RuntimeError("rapidocr-onnxruntime is not installed.") from e
+
+    engine = RapidOCR()
+    image_array = np.array(image.convert("RGB"))
+    result, _ = engine(image_array)
+    if not result:
+        return ""
+
+    lines = []
+    for item in result:
+        if len(item) >= 2:
+            lines.append(str(item[1]).strip())
+
+    return "\n".join(line for line in lines if line)
+
+
+def _groq_vision_ocr(image):
+    if not GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is missing. Cannot run vision OCR fallback.")
+
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    image_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model=IMAGE_OCR_MODEL,
+        temperature=0,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Extract all readable text from this image. Return plain text only."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                ],
+            }
+        ],
+    )
+    return (response.choices[0].message.content or "").strip()
+
+
+def _ocr_image(image):
+    errors = []
+
+    try:
+        text = pytesseract.image_to_string(image)
+        if text and text.strip():
+            return text
+        errors.append("Tesseract returned empty text.")
+    except Exception as e:
+        errors.append(f"Tesseract failed: {e}")
+
+    try:
+        text = _rapidocr_image(image)
+        if text and text.strip():
+            return text
+        errors.append("RapidOCR returned empty text.")
+    except Exception as e:
+        errors.append(f"RapidOCR failed: {e}")
+
+    try:
+        text = _groq_vision_ocr(image)
+        if text and text.strip():
+            return text
+        errors.append("Vision OCR returned empty text.")
+    except Exception as e:
+        errors.append(f"Vision OCR failed: {e}")
+
+    raise RuntimeError(
+        "OCR could not extract text. "
+        "Install/configure Tesseract, keep rapidocr-onnxruntime installed, or set GROQ_API_KEY for vision OCR. "
+        + " | ".join(errors)
+    )
+
+
 def _load_pdf_with_pypdf(file):
     from pypdf import PdfReader
 
@@ -45,33 +124,78 @@ def _open_pdf(file):
     return fitz.open(stream=file.read(), filetype="pdf")
 
 
+def _load_pdf_with_pymupdf(file):
+    file.seek(0)
+    with _open_pdf(file) as doc:
+        return "\n".join(page.get_text() for page in doc if page.get_text().strip())
+
+
+def _load_pdf_with_ocr(file):
+    import fitz
+
+    file.seek(0)
+    text = []
+    errors = []
+    with _open_pdf(file) as doc:
+        for page_number, page in enumerate(doc, start=1):
+            try:
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                image = Image.open(BytesIO(pixmap.tobytes("png")))
+                page_text = _ocr_image(image)
+                if page_text.strip():
+                    text.append(f"Page {page_number}:\n{page_text.strip()}")
+            except Exception as e:
+                errors.append(f"page {page_number}: {e}")
+
+    if text:
+        return "\n\n".join(text)
+
+    if errors:
+        raise RuntimeError("PDF OCR failed for all pages. " + " | ".join(errors))
+
+    return ""
+
+
 def load_pdf(file):
+    errors = []
+
     try:
         text = _load_pdf_with_pypdf(file)
         if text.strip():
             return text
-    except Exception as pypdf_error:
-        file.seek(0)
-        try:
-            with _open_pdf(file) as doc:
-                return " ".join([p.get_text() for p in doc])
-        except Exception as pymupdf_error:
-            raise RuntimeError(
-                "PDF extraction failed with both pypdf and PyMuPDF. "
-                f"pypdf error: {pypdf_error}; PyMuPDF error: {pymupdf_error}"
-            ) from pymupdf_error
+        errors.append("pypdf returned empty text.")
+    except Exception as e:
+        errors.append(f"pypdf failed: {e}")
+
+    try:
+        text = _load_pdf_with_pymupdf(file)
+        if text.strip():
+            return text
+        errors.append("PyMuPDF returned empty text.")
+    except Exception as e:
+        errors.append(f"PyMuPDF text extraction failed: {e}")
+
+    try:
+        text = _load_pdf_with_ocr(file)
+        if text.strip():
+            return text
+        errors.append("PDF OCR returned empty text.")
+    except Exception as e:
+        errors.append(f"PDF OCR failed: {e}")
 
     raise RuntimeError(
-        "PDF text extraction returned no text. The PDF may be scanned or image-only; "
-        "try OCR/image ingestion for scanned documents."
+        "PDF text extraction returned no text. The PDF may be scanned, image-only, or unreadable. "
+        + " | ".join(errors)
     )
 
 def load_docx(file):
+    file.seek(0)
     doc = Document(file)
     return " ".join([p.text for p in doc.paragraphs])
 
 
 def load_pptx(file):
+    file.seek(0)
     prs = Presentation(file)
     text = []
     for s in prs.slides:
@@ -82,86 +206,22 @@ def load_pptx(file):
 
 
 def load_csv(file):
+    file.seek(0)
     return pd.read_csv(file).to_string()
 
 
 def load_image(file):
-    def _rapidocr_fallback(image):
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-        except Exception as e:
-            raise RuntimeError("rapidocr-onnxruntime is not installed.") from e
-
-        engine = RapidOCR()
-        image_array = np.array(image.convert("RGB"))
-        result, _ = engine(image_array)
-        if not result:
-            return ""
-
-        lines = []
-        for item in result:
-            if len(item) >= 2:
-                lines.append(str(item[1]).strip())
-
-        return "\n".join(line for line in lines if line)
-
-    def _groq_vision_ocr(image):
-        if not GROQ_API_KEY:
-            raise RuntimeError("GROQ_API_KEY is missing. Cannot run vision OCR fallback.")
-
-        buffer = BytesIO()
-        image.save(buffer, format="PNG")
-        image_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
-
-        client = Groq(api_key=GROQ_API_KEY)
-        response = client.chat.completions.create(
-            model=IMAGE_OCR_MODEL,
-            temperature=0,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Extract all readable text from this image. Return plain text only."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
-                    ],
-                }
-            ],
-        )
-        return (response.choices[0].message.content or "").strip()
-
-    try:
-        file.seek(0)
-        image = Image.open(file)
-        return pytesseract.image_to_string(image)
-    except pytesseract.TesseractNotFoundError as e:
-        rapidocr_error = None
-        try:
-            file.seek(0)
-            image = Image.open(file)
-            text = _rapidocr_fallback(image)
-            if text:
-                return text
-        except Exception as re:
-            rapidocr_error = re
-
-        try:
-            file.seek(0)
-            image = Image.open(file)
-            text = _groq_vision_ocr(image)
-            if text:
-                return text
-            raise RuntimeError("Vision OCR fallback returned empty text.")
-        except Exception as fallback_error:
-            raise RuntimeError(
-                "OCR is not available locally (Tesseract missing), RapidOCR fallback failed, and vision OCR fallback failed. "
-                "Install Tesseract OCR and set TESSERACT_CMD in .env, or set IMAGE_OCR_MODEL to a working vision model."
-            ) from (rapidocr_error or fallback_error)
+    file.seek(0)
+    image = Image.open(file)
+    return _ocr_image(image)
 
 def load_json(file):
+    file.seek(0)
     return json.dumps(json.load(file), indent=2, ensure_ascii=False)
 
 
 def load_text(file):
+    file.seek(0)
     content = file.read()
     if isinstance(content, bytes):
         return content.decode("utf-8", errors="replace")
@@ -176,6 +236,7 @@ def load_html(file):
 
 
 def load_excel(file):
+    file.seek(0)
     sheets = pd.read_excel(file, sheet_name=None)
     text = []
     for sheet_name, dataframe in sheets.items():
