@@ -417,6 +417,8 @@ def sidebar(chats, chat_id):
             if submitted:
                 if new_password != confirm_password:
                     st.error("New passwords do not match.")
+                elif current_password.strip() == new_password.strip():
+                    st.error("Enter a different password from your current password.")
                 else:
                     try:
                         res = request(

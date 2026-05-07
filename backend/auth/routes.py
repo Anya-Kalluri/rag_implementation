@@ -82,6 +82,9 @@ def change_password(req: ChangePasswordRequest, user=Depends(get_current_user)):
     if len(new_password) < 4:
         raise HTTPException(status_code=400, detail="New password must be at least 4 characters")
 
+    if verify_password(new_password, db_user["password"]):
+        raise HTTPException(status_code=400, detail="Enter a different password from your current password")
+
     fake_users_db[username]["password"] = hash_password(new_password)
     save_users()
 
