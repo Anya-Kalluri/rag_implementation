@@ -11,6 +11,7 @@ FILE_COLUMNS = [
     "role",
     "chat_id",
     "path",
+    "is_shared",
     "source_file",
     "source_uploaded_by",
     "source_role",
@@ -33,7 +34,7 @@ def row_to_file(row):
     return {column: row[column] for column in FILE_COLUMNS if column in row.keys()}
 
 
-def add_file(filename, user, role, chat_id, path, source=None):
+def add_file(filename, user, role, chat_id, path, source=None, is_shared=True):
     init_db()
     user = user.strip()
     role = role.strip()
@@ -46,6 +47,7 @@ def add_file(filename, user, role, chat_id, path, source=None):
         "role": role,
         "chat_id": chat_id,
         "path": path,
+        "is_shared": 1 if is_shared else 0,
         "source_file": source.get("file"),
         "source_uploaded_by": source.get("uploaded_by"),
         "source_role": source.get("role"),
@@ -68,11 +70,11 @@ def add_file(filename, user, role, chat_id, path, source=None):
         conn.execute(
             """
             INSERT INTO files (
-                file_key, file, uploaded_by, role, chat_id, path,
+                file_key, file, uploaded_by, role, chat_id, path, is_shared,
                 source_file, source_uploaded_by, source_role, source_chat_id,
                 source_path, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["file_key"],
@@ -81,6 +83,7 @@ def add_file(filename, user, role, chat_id, path, source=None):
                 item["role"],
                 item["chat_id"],
                 item["path"],
+                item["is_shared"],
                 item["source_file"],
                 item["source_uploaded_by"],
                 item["source_role"],

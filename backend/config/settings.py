@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / ".env")
+load_dotenv(ROOT_DIR / "backend" / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY") or "fallback_secret"
 ALGORITHM = os.getenv("ALGORITHM") or "HS256"

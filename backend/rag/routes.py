@@ -152,6 +152,7 @@ async def upload_file(
     file: UploadFile = File(...),
     file_type: str = "",
     chat_id: str = "",
+    is_shared: bool = True,
     user=Depends(get_current_user),
 ):
     start_time = time.time()
@@ -209,7 +210,7 @@ async def upload_file(
                 detail="No text chunks were created. Check the file type/content and backend logs.",
             )
 
-        add_file(filename, username, role, chat_id, file_path)
+        add_file(filename, username, role, chat_id, file_path, is_shared=is_shared)
 
         latency_ms = (time.time() - start_time) * 1000
         log_upload(
@@ -232,6 +233,7 @@ async def upload_file(
             "file": filename,
             "chat_id": chat_id,
             "chunks": chunks,
+            "is_shared": is_shared,
             "latency_ms": round(latency_ms, 2),
         }
 
@@ -262,10 +264,13 @@ async def upload_file(
 
 @router.get("/available-files")
 def available_files(user=Depends(get_current_user)):
+    role = user["role"].strip()
     files = [
         item for item in get_files()
         if not item.get("source_path")
     ]
+    if role not in {"viewer", "guest"}:
+        files = [item for item in files if item.get("is_shared")]
     return {"files": files}
 
 
@@ -280,6 +285,9 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
     source = get_file_by_key(req.file_key)
     if not source or source.get("source_path"):
         raise HTTPException(status_code=404, detail="File not found")
+
+    if role in {"viewer", "guest"} and not source.get("is_shared"):
+        raise HTTPException(status_code=403, detail="No permission to query this file")
 
     existing = get_files(username, req.chat_id)
     for item in existing:
@@ -310,6 +318,7 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
             req.chat_id,
             source.get("path"),
             source=source,
+            is_shared=bool(source.get("is_shared")),
         )
 
         latency_ms = (time.time() - start_time) * 1000
@@ -370,6 +379,7 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
         req.chat_id,
         source.get("path"),
         source=source,
+        is_shared=bool(source.get("is_shared")),
     )
 
     latency_ms = (time.time() - start_time) * 1000
@@ -484,6 +494,7 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
                 "retrieval_precision_at_k": round(evaluation["retrieval_precision_at_k"], 4),
                 "retrieval_recall_proxy": round(evaluation["retrieval_recall_proxy"], 4),
                 "response_relevance": round(evaluation["response_relevance"], 4),
+                "error": generation_metrics.get("error"),
             },
         }
         if guest_usage:

@@ -47,6 +47,7 @@ DEFAULT_SESSION = {
 
 ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/login", "Purpose": "Authenticate user and return JWT"},
+    {"Method": "POST", "Endpoint": "/change-password", "Purpose": "Change password for the logged-in user"},
     {"Method": "GET", "Endpoint": "/get-chats", "Purpose": "List chats for current user"},
     {"Method": "GET", "Endpoint": "/health", "Purpose": "System health monitoring"},
     {"Method": "POST", "Endpoint": "/create-chat", "Purpose": "Create a document chat workspace"},
@@ -287,6 +288,10 @@ def load_users(show_errors=True):
 
 
 def process_available_file(file_item, chat_id):
+    if not file_item.get("is_shared"):
+        st.sidebar.warning("No permission to query this file.")
+        return
+
     try:
         res = request(
             "POST",
@@ -394,6 +399,35 @@ def sidebar(chats, chat_id):
         st.markdown("### Workspace")
         st.write(f"{st.session_state.username} ({st.session_state.role})")
 
+        with st.expander("Change Password", expanded=False):
+            with st.form("change_password_form"):
+                current_password = st.text_input("Current password", type="password")
+                new_password = st.text_input("New password", type="password")
+                confirm_password = st.text_input("Confirm new password", type="password")
+                submitted = st.form_submit_button("Update Password", use_container_width=True)
+
+            if submitted:
+                if new_password != confirm_password:
+                    st.error("New passwords do not match.")
+                else:
+                    try:
+                        res = request(
+                            "POST",
+                            "/change-password",
+                            json={
+                                "current_password": current_password,
+                                "new_password": new_password,
+                            },
+                            timeout=30,
+                        )
+                    except requests.RequestException:
+                        st.error("Backend not reachable.")
+                    else:
+                        if res.status_code == 200:
+                            st.success("Password changed.")
+                        else:
+                            st.error(error_detail(res))
+
         if st.button("Logout", use_container_width=True):
             reset_session()
             st.rerun()
@@ -449,6 +483,8 @@ def sidebar(chats, chat_id):
                             f"Uploaded by {item.get('uploaded_by', '')} "
                             f"({item.get('role', '')})"
                         )
+                        if not item.get("is_shared"):
+                            st.caption("Restricted")
                         if st.button("Use in this chat", key=key, use_container_width=True):
                             process_available_file(item, chat_id)
             else:
@@ -510,16 +546,23 @@ def upload_panel(chat_id):
             type=SUPPORTED_UPLOAD_TYPES,
             key=st.session_state.uploaded_file_key,
         )
+        share_file = st.radio(
+            "Do you want the file to be accessed or viewed by others for querying?",
+            ["Yes", "No"],
+            horizontal=True,
+            index=0,
+        )
 
         disabled = uploaded_file is None
         if st.button("Process Document", type="primary", disabled=disabled):
             file_type = uploaded_file.name.rsplit(".", 1)[-1].lower()
+            is_shared = share_file == "Yes"
 
             with st.spinner("Extracting text, chunking, and indexing..."):
                 try:
                     res = request(
                         "POST",
-                        f"/upload?file_type={file_type}&chat_id={chat_id}",
+                        f"/upload?file_type={file_type}&chat_id={chat_id}&is_shared={str(is_shared).lower()}",
                         files={
                             "file": (
                                 uploaded_file.name,
@@ -539,6 +582,7 @@ def upload_panel(chat_id):
                     "file": data.get("file", uploaded_file.name),
                     "chunks": data.get("chunks", 0),
                     "chat_id": data.get("chat_id", chat_id),
+                    "is_shared": data.get("is_shared", is_shared),
                 }
                 st.session_state.uploaded_file_key += 1
                 st.rerun()
@@ -589,6 +633,9 @@ def render_history():
 
             telemetry = message.get("telemetry") or {}
             if telemetry:
+                if telemetry.get("error"):
+                    st.warning(f"Generation error: {telemetry['error']}")
+
                 with st.expander("Answer Telemetry", expanded=False):
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Latency", f"{telemetry.get('latency_ms', 0)} ms")

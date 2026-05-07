@@ -37,6 +37,11 @@ class LoginUser(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 # -------------------------------
 # LOGIN
 # -------------------------------
@@ -60,6 +65,27 @@ def login(user: LoginUser):
         "access_token": token,
         "role": db_user["role"]
     }
+
+
+@router.post("/change-password")
+def change_password(req: ChangePasswordRequest, user=Depends(get_current_user)):
+    username = user["sub"]
+    db_user = fake_users_db.get(username)
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not verify_password(req.current_password, db_user["password"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    new_password = req.new_password.strip()
+    if len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="New password must be at least 4 characters")
+
+    fake_users_db[username]["password"] = hash_password(new_password)
+    save_users()
+
+    return {"message": "Password changed successfully"}
 
 
 # -------------------------------

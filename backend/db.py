@@ -72,6 +72,7 @@ def init_db():
                 role TEXT NOT NULL,
                 chat_id TEXT NOT NULL,
                 path TEXT NOT NULL,
+                is_shared INTEGER NOT NULL DEFAULT 1,
                 source_file TEXT,
                 source_uploaded_by TEXT,
                 source_role TEXT,
@@ -137,6 +138,14 @@ def init_db():
             );
             """
         )
+        file_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(files)").fetchall()
+        }
+        if "is_shared" not in file_columns:
+            conn.execute(
+                "ALTER TABLE files ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 1"
+            )
 
 
 def get_state(key, default=None):
