@@ -191,7 +191,15 @@ def load_chats(show_errors=False):
     try:
         res = request("GET", "/get-chats")
         if res.status_code == 200:
-            return res.json().get("chats", [])
+            chats = res.json().get("chats", [])
+            return sorted(
+                chats,
+                key=lambda chat: (
+                    float(chat.get("created_at") or 0),
+                    int(chat.get("position") or 0),
+                ),
+                reverse=True,
+            )
         if show_errors:
             st.error(error_detail(res))
     except requests.RequestException:

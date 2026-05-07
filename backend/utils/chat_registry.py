@@ -31,15 +31,24 @@ def get_chats(user):
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT chat_id, title
+            SELECT chat_id, title, position, created_at, updated_at
             FROM chats
             WHERE user = ?
-            ORDER BY position ASC, created_at ASC
+            ORDER BY created_at DESC, position DESC
             """,
             (user,),
         ).fetchall()
 
-    return [{"chat_id": row["chat_id"], "title": row["title"]} for row in rows]
+    return [
+        {
+            "chat_id": row["chat_id"],
+            "title": row["title"],
+            "position": row["position"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
 
 
 def delete_chat(user, chat_id):
