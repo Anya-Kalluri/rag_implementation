@@ -43,6 +43,7 @@ DEFAULT_SESSION = {
     "telemetry": None,
     "upload_notice": None,
     "uploaded_file_key": 0,
+    "editing_chat_id": None,
 }
 
 ENDPOINT_DOCS = [
@@ -184,6 +185,7 @@ def switch_chat(chat_id):
     st.session_state.chat_id = chat_id
     st.session_state.history = []
     st.session_state.upload_notice = None
+    st.session_state.editing_chat_id = None
     st.session_state.uploaded_file_key += 1
 
 
@@ -378,28 +380,28 @@ def login_page():
             st.error(error_detail(res))
 
 
-def chat_controls(chat):
-    with st.expander("Chat Settings", expanded=False):
-        title = st.text_input("Title", value=chat.get("title", ""), key=f"title_{chat['chat_id']}")
-        col1, col2 = st.columns([1, 1])
+def rename_chat(chat_id, title):
+    res = request(
+        "POST",
+        "/rename-chat",
+        json={"chat_id": chat_id, "title": title.strip() or "Untitled"},
+    )
+    if res.status_code == 200:
+        st.session_state.editing_chat_id = None
+        st.rerun()
 
-        if col1.button("Rename", use_container_width=True):
-            res = request(
-                "POST",
-                "/rename-chat",
-                json={"chat_id": chat["chat_id"], "title": title.strip() or "Untitled"},
-            )
-            if res.status_code == 200:
-                st.success("Chat renamed.")
-                st.rerun()
-            st.error(error_detail(res))
+    st.error(error_detail(res))
 
-        if col2.button("Delete", use_container_width=True):
-            res = request("DELETE", f"/delete-chat/{chat['chat_id']}", timeout=30)
-            if res.status_code == 200:
-                switch_chat(None)
-                st.rerun()
-            st.error(error_detail(res))
+
+def remove_chat(chat_id):
+    res = request("DELETE", f"/delete-chat/{chat_id}", timeout=30)
+    if res.status_code == 200:
+        if st.session_state.chat_id == chat_id:
+            switch_chat(None)
+        st.session_state.editing_chat_id = None
+        st.rerun()
+
+    st.error(error_detail(res))
 
 
 def sidebar(chats, chat_id):
@@ -457,7 +459,9 @@ def sidebar(chats, chat_id):
         for chat in chats:
             is_active = chat["chat_id"] == chat_id
             label = chat.get("title") or chat["chat_id"][:8]
-            if st.button(
+            chat_col, edit_col, delete_col = st.columns([6, 1, 1])
+
+            if chat_col.button(
                 label,
                 key=f"chat_select_{chat['chat_id']}",
                 type="primary" if is_active else "secondary",
@@ -465,6 +469,31 @@ def sidebar(chats, chat_id):
             ):
                 switch_chat(chat["chat_id"])
                 st.rerun()
+
+            if edit_col.button("✎", key=f"chat_edit_{chat['chat_id']}", help="Rename chat"):
+                st.session_state.editing_chat_id = chat["chat_id"]
+                st.rerun()
+
+            if delete_col.button("×", key=f"chat_delete_{chat['chat_id']}", help="Delete chat"):
+                remove_chat(chat["chat_id"])
+
+            if st.session_state.editing_chat_id == chat["chat_id"]:
+                with st.form(f"rename_chat_form_{chat['chat_id']}"):
+                    new_title = st.text_input(
+                        "New chat name",
+                        value=label,
+                        key=f"rename_chat_title_{chat['chat_id']}",
+                    )
+                    save_col, cancel_col = st.columns([1, 1])
+                    save = save_col.form_submit_button("Save", type="primary", use_container_width=True)
+                    cancel = cancel_col.form_submit_button("Cancel", use_container_width=True)
+
+                if save:
+                    rename_chat(chat["chat_id"], new_title)
+
+                if cancel:
+                    st.session_state.editing_chat_id = None
+                    st.rerun()
 
         st.divider()
         st.markdown("### Documents")
@@ -859,7 +888,6 @@ def chat_page():
     col2.metric("Messages", len(st.session_state.history))
     col3.metric("Answers", count_assistant_turns(st.session_state.history))
 
-    chat_controls(chat)
     upload_panel(chat_id)
     admin_panel()
 
