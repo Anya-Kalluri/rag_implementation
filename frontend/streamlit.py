@@ -1,11 +1,19 @@
 import os
+import json
 from datetime import datetime
+from urllib.parse import unquote
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 API_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000")
+AUTH_ACCESS_COOKIE = "rag_access_token"
+AUTH_REFRESH_COOKIE = "rag_refresh_token"
+AUTH_USERNAME_COOKIE = "rag_username"
+AUTH_ROLE_COOKIE = "rag_role"
+AUTH_COOKIE_MAX_AGE_SECONDS = int(os.getenv("RAG_AUTH_COOKIE_MAX_AGE_SECONDS", 7 * 24 * 60 * 60))
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
 ADMIN_ROLES = {"admin"}
 USER_MANAGEMENT_ROLES = {"admin", "manager"}
@@ -35,6 +43,7 @@ SUPPORTED_UPLOAD_TYPES = [
 DEFAULT_SESSION = {
     "page": "login",
     "token": None,
+    "refresh_token": None,
     "username": None,
     "role": None,
     "chat_id": None,
@@ -47,7 +56,8 @@ DEFAULT_SESSION = {
 }
 
 ENDPOINT_DOCS = [
-    {"Method": "POST", "Endpoint": "/login", "Purpose": "Authenticate user and return JWT"},
+    {"Method": "POST", "Endpoint": "/login", "Purpose": "Authenticate user and return JWT access and refresh tokens"},
+    {"Method": "POST", "Endpoint": "/refresh-token", "Purpose": "Exchange a valid refresh token for a new JWT pair"},
     {"Method": "POST", "Endpoint": "/change-password", "Purpose": "Change password for the logged-in user"},
     {"Method": "GET", "Endpoint": "/get-chats", "Purpose": "List chats for current user"},
     {"Method": "GET", "Endpoint": "/health", "Purpose": "System health monitoring"},
@@ -113,6 +123,58 @@ for key, value in DEFAULT_SESSION.items():
 def reset_session():
     for key, value in DEFAULT_SESSION.items():
         st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
+    clear_auth_cookies()
+
+
+def cookie_value(name):
+    value = st.context.cookies.get(name)
+    return unquote(value) if value else None
+
+
+def sync_auth_cookies():
+    if not st.session_state.token or not st.session_state.refresh_token:
+        return
+
+    cookies = {
+        AUTH_ACCESS_COOKIE: st.session_state.token,
+        AUTH_REFRESH_COOKIE: st.session_state.refresh_token,
+        AUTH_USERNAME_COOKIE: st.session_state.username or "",
+        AUTH_ROLE_COOKIE: st.session_state.role or "",
+    }
+    components.html(
+        f"""
+        <script>
+        const cookies = {json.dumps(cookies)};
+        let targetDocument = document;
+        try {{
+            targetDocument = window.parent.document;
+        }} catch (error) {{}}
+        for (const [name, value] of Object.entries(cookies)) {{
+            targetDocument.cookie =
+                `${{name}}=${{encodeURIComponent(value)}}; path=/; max-age={AUTH_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+        }}
+        </script>
+        """,
+        height=0,
+    )
+
+
+def clear_auth_cookies():
+    components.html(
+        f"""
+        <script>
+        let targetDocument = document;
+        try {{
+            targetDocument = window.parent.document;
+        }} catch (error) {{}}
+        for (const name of {json.dumps([AUTH_ACCESS_COOKIE, AUTH_REFRESH_COOKIE, AUTH_USERNAME_COOKIE, AUTH_ROLE_COOKIE])}) {{
+            targetDocument.cookie =
+                `${{name}}=; path=/; max-age=0; SameSite=Lax`;
+        }}
+        </script>
+        """,
+        height=0,
+    )
 
 
 def auth_headers():
@@ -167,18 +229,78 @@ def format_time(timestamp):
         return ""
 
 
+def refresh_access_token():
+    if not st.session_state.refresh_token:
+        return False
+
+    try:
+        res = request(
+            "POST",
+            "/refresh-token",
+            auth=False,
+            json={"refresh_token": st.session_state.refresh_token},
+            timeout=30,
+        )
+    except requests.RequestException:
+        return False
+
+    if res.status_code != 200:
+        reset_session()
+        return False
+
+    data = res.json()
+    st.session_state.token = data["access_token"]
+    st.session_state.refresh_token = data["refresh_token"]
+    st.session_state.username = data.get("username") or st.session_state.username
+    st.session_state.role = data["role"]
+    return True
+
+
 def request(method, path, auth=True, timeout=60, **kwargs):
     headers = kwargs.pop("headers", {})
     if auth:
         headers.update(auth_headers())
 
-    return requests.request(
+    response = requests.request(
         method,
         f"{API_URL}{path}",
         headers=headers,
         timeout=timeout,
         **kwargs,
     )
+    if auth and response.status_code == 401 and refresh_access_token():
+        headers.update(auth_headers())
+        response = requests.request(
+            method,
+            f"{API_URL}{path}",
+            headers=headers,
+            timeout=timeout,
+            **kwargs,
+        )
+
+    return response
+
+
+def restore_auth_session():
+    if st.session_state.token:
+        sync_auth_cookies()
+        return
+
+    access_token = cookie_value(AUTH_ACCESS_COOKIE)
+    refresh_token = cookie_value(AUTH_REFRESH_COOKIE)
+    if not access_token and not refresh_token:
+        return
+
+    st.session_state.token = access_token
+    st.session_state.refresh_token = refresh_token
+    st.session_state.username = cookie_value(AUTH_USERNAME_COOKIE)
+    st.session_state.role = cookie_value(AUTH_ROLE_COOKIE)
+    st.session_state.page = "chat"
+
+    if not st.session_state.token:
+        refresh_access_token()
+
+    sync_auth_cookies()
 
 
 def switch_chat(chat_id):
@@ -334,7 +456,8 @@ def load_history(chat_id):
             return
         if res.status_code == 401:
             reset_session()
-            st.rerun()
+            st.warning("Session expired. Please log in again.")
+            st.stop()
         st.warning(f"History unavailable: {error_detail(res)}")
     except requests.RequestException:
         st.warning("Could not load chat history.")
@@ -371,7 +494,8 @@ def login_page():
             if res.status_code == 200:
                 data = res.json()
                 st.session_state.token = data["access_token"]
-                st.session_state.username = username.strip()
+                st.session_state.refresh_token = data["refresh_token"]
+                st.session_state.username = data.get("username") or username.strip()
                 st.session_state.role = data["role"]
                 st.session_state.page = "chat"
                 switch_chat(None)
@@ -442,7 +566,6 @@ def sidebar(chats, chat_id):
 
         if st.button("Logout", use_container_width=True):
             reset_session()
-            st.rerun()
 
         st.divider()
         col1, col2 = st.columns([1, 1])
@@ -900,6 +1023,8 @@ def chat_page():
     render_history()
     query_panel(chat_id, files)
 
+
+restore_auth_session()
 
 if st.session_state.page == "chat":
     chat_page()

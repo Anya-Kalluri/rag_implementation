@@ -4,12 +4,19 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from backend.config.settings import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+from backend.config.settings import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    SECRET_KEY,
+)
 from backend.db import connect, init_db
 
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 fake_users_db = {}
+ACCESS_TOKEN_TYPE = "access"
+REFRESH_TOKEN_TYPE = "refresh"
 
 
 def load_users():
@@ -76,10 +83,33 @@ def verify_password(plain: str, hashed: str):
     return pwd_context.verify(plain, hashed)
 
 
-def create_token(data: dict):
+def create_token(
+    data: dict,
+    expires_delta: timedelta | None = None,
+    token_type: str = ACCESS_TOKEN_TYPE,
+):
     to_encode = data.copy()
-    to_encode["exp"] = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode["token_type"] = token_type
+    to_encode["exp"] = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_access_token(data: dict):
+    return create_token(
+        data,
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        token_type=ACCESS_TOKEN_TYPE,
+    )
+
+
+def create_refresh_token(data: dict):
+    return create_token(
+        data,
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        token_type=REFRESH_TOKEN_TYPE,
+    )
 
 
 def decode_token(token: str):

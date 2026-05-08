@@ -17,10 +17,24 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     token = credentials.credentials
     payload = decode_token(token)
 
-    if not payload:
+    if not payload or payload.get("token_type", ACCESS_TOKEN_TYPE) != ACCESS_TOKEN_TYPE:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     return payload
+
+
+def build_token_response(username: str, role: str):
+    payload = {
+        "sub": username,
+        "role": role,
+    }
+    return {
+        "access_token": create_access_token(payload),
+        "refresh_token": create_refresh_token(payload),
+        "token_type": "bearer",
+        "username": username,
+        "role": role,
+    }
 
 
 # -------------------------------
@@ -37,6 +51,18 @@ class LoginUser(BaseModel):
     password: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    username: str
+    role: str
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -45,7 +71,7 @@ class ChangePasswordRequest(BaseModel):
 # -------------------------------
 # LOGIN
 # -------------------------------
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(user: LoginUser):
 
     db_user = fake_users_db.get(user.username)
@@ -56,15 +82,22 @@ def login(user: LoginUser):
     if not verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_token({
-        "sub": user.username,
-        "role": db_user["role"]
-    })
+    return build_token_response(user.username, db_user["role"])
 
-    return {
-        "access_token": token,
-        "role": db_user["role"]
-    }
+
+@router.post("/refresh-token", response_model=TokenResponse)
+def refresh_token(req: RefreshTokenRequest):
+    payload = decode_token(req.refresh_token)
+
+    if not payload or payload.get("token_type") != REFRESH_TOKEN_TYPE:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    username = payload.get("sub")
+    db_user = fake_users_db.get(username)
+    if not username or not db_user:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    return build_token_response(username, db_user["role"])
 
 
 @router.post("/change-password")

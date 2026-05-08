@@ -11,6 +11,7 @@ load_dotenv(ROOT_DIR / "backend" / ".env")
 SECRET_KEY = os.getenv("SECRET_KEY") or "fallback_secret"
 ALGORITHM = os.getenv("ALGORITHM") or "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "groq").strip().lower()
 LLM_API_KEY = os.getenv("LLM_API_KEY") or GROQ_API_KEY
