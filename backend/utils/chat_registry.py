@@ -17,10 +17,10 @@ def create_chat(user):
         position = int(row["count"] or 0) + 1
         conn.execute(
             """
-            INSERT INTO chats (user, chat_id, title, position, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO chats (user, chat_id, title, auto_title, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user, chat_id, f"Chat {position}", position, now, now),
+            (user, chat_id, f"Chat {position}", 1, position, now, now),
         )
 
     return chat_id
@@ -31,7 +31,7 @@ def get_chats(user):
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT chat_id, title, position, created_at, updated_at
+            SELECT chat_id, title, auto_title, position, created_at, updated_at
             FROM chats
             WHERE user = ?
             ORDER BY created_at DESC, position DESC
@@ -43,6 +43,7 @@ def get_chats(user):
         {
             "chat_id": row["chat_id"],
             "title": row["title"],
+            "auto_title": bool(row["auto_title"]),
             "position": row["position"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -70,8 +71,50 @@ def rename_chat(user, chat_id, new_title):
         conn.execute(
             """
             UPDATE chats
-            SET title = ?, updated_at = ?
+            SET title = ?, auto_title = 0, updated_at = ?
             WHERE user = ? AND chat_id = ?
             """,
             (new_title, time.time(), user, chat_id),
         )
+
+
+def auto_rename_chat(user, chat_id, new_title):
+    title = str(new_title or "").strip()
+    if not title:
+        return None
+
+    init_db()
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT title, auto_title
+            FROM chats
+            WHERE user = ? AND chat_id = ?
+            """,
+            (user, chat_id),
+        ).fetchone()
+
+        if not row or not bool(row["auto_title"]):
+            return None
+
+        if row["title"] == title:
+            conn.execute(
+                """
+                UPDATE chats
+                SET auto_title = 0, updated_at = ?
+                WHERE user = ? AND chat_id = ?
+                """,
+                (time.time(), user, chat_id),
+            )
+            return title
+
+        conn.execute(
+            """
+            UPDATE chats
+            SET title = ?, auto_title = 0, updated_at = ?
+            WHERE user = ? AND chat_id = ?
+            """,
+            (title, time.time(), user, chat_id),
+        )
+
+    return title

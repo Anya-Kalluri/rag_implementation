@@ -51,6 +51,7 @@ def init_db():
                 user TEXT NOT NULL,
                 chat_id TEXT NOT NULL,
                 title TEXT NOT NULL,
+                auto_title INTEGER NOT NULL DEFAULT 1,
                 position INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
@@ -145,6 +146,22 @@ def init_db():
         if "is_shared" not in file_columns:
             conn.execute(
                 "ALTER TABLE files ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 1"
+            )
+
+        chat_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(chats)").fetchall()
+        }
+        if "auto_title" not in chat_columns:
+            conn.execute(
+                "ALTER TABLE chats ADD COLUMN auto_title INTEGER NOT NULL DEFAULT 1"
+            )
+            conn.execute(
+                """
+                UPDATE chats
+                SET auto_title = 0
+                WHERE title NOT GLOB 'Chat [0-9]*'
+                """
             )
 
 

@@ -14,6 +14,7 @@ from backend.rag.pipeline import rag
 from backend.utils.chat_history import load_history, save_history
 from backend.utils.chat_memory import prepare_chat_memory
 from backend.utils.chat_registry import create_chat, delete_chat, get_chats, rename_chat
+from backend.utils.chat_titles import auto_update_chat_title, repair_unprofessional_chat_title
 from backend.utils.file_metadata import add_file, get_file_by_key, get_files
 from backend.utils.logger import load_events, log_event
 from backend.utils.metrics import load as load_metrics
@@ -227,11 +228,13 @@ async def upload_file(
             "chunks": chunks,
             "latency_ms": round(latency_ms, 2),
         })
+        chat_title = auto_update_chat_title(username, chat_id)
 
         return {
             "message": "File processed",
             "file": filename,
             "chat_id": chat_id,
+            "chat_title": chat_title,
             "chunks": chunks,
             "is_shared": is_shared,
             "latency_ms": round(latency_ms, 2),
@@ -292,10 +295,12 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
     existing = get_files(username, req.chat_id)
     for item in existing:
         if item.get("source_path", item.get("path")) == source.get("path"):
+            chat_title = auto_update_chat_title(username, req.chat_id)
             return {
                 "message": "File already ready for querying",
                 "file": source.get("file"),
                 "chat_id": req.chat_id,
+                "chat_title": chat_title,
                 "chunks": 0,
                 "already_processed": True,
             }
@@ -333,11 +338,13 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
             "latency_ms": round(latency_ms, 2),
             "source": "url",
         })
+        chat_title = auto_update_chat_title(username, req.chat_id)
 
         return {
             "message": "URL processed",
             "file": source.get("file"),
             "chat_id": req.chat_id,
+            "chat_title": chat_title,
             "chunks": chunks,
             "source_uploaded_by": source.get("uploaded_by"),
             "latency_ms": round(latency_ms, 2),
@@ -393,11 +400,13 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
         "chunks": chunks,
         "latency_ms": round(latency_ms, 2),
     })
+    chat_title = auto_update_chat_title(username, req.chat_id)
 
     return {
         "message": "File processed",
         "file": source.get("file"),
         "chat_id": req.chat_id,
+        "chat_title": chat_title,
         "chunks": chunks,
         "source_uploaded_by": source.get("uploaded_by"),
         "latency_ms": round(latency_ms, 2),
@@ -501,11 +510,13 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
             assistant_message["guest_usage"] = guest_usage
         history.append(assistant_message)
         save_history(username, req.chat_id, history)
+        chat_title = auto_update_chat_title(username, req.chat_id, latest_query=req.query)
 
         response = {
             "answer": answer,
             "sources": [c["text"][:300] for c in chunks],
             "telemetry": history[-1]["telemetry"],
+            "chat_title": chat_title,
         }
         if guest_usage:
             response["guest_usage"] = guest_usage
@@ -557,11 +568,13 @@ def ingest_url(req: UrlIngestRequest, user=Depends(get_current_user)):
             "latency_ms": round(latency_ms, 2),
             "source": "url",
         })
+        chat_title = auto_update_chat_title(username, req.chat_id)
 
         return {
             "message": "URL processed",
             "url": url_name,
             "chat_id": req.chat_id,
+            "chat_title": chat_title,
             "chunks": chunks,
             "latency_ms": round(latency_ms, 2),
         }
@@ -580,7 +593,23 @@ def create_new_chat(user=Depends(get_current_user)):
 
 @router.get("/get-chats")
 def list_chats(user=Depends(get_current_user)):
-    return {"chats": get_chats(user["sub"].strip())}
+    username = user["sub"].strip()
+    chats = get_chats(username)
+    repaired = False
+    for chat in chats:
+        new_title = repair_unprofessional_chat_title(
+            username,
+            chat["chat_id"],
+            chat.get("title"),
+        )
+        if new_title:
+            chat["title"] = new_title
+            repaired = True
+
+    if repaired:
+        chats = get_chats(username)
+
+    return {"chats": chats}
 
 
 @router.delete("/delete-chat/{chat_id}")
