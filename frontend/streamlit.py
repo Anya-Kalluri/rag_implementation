@@ -13,6 +13,7 @@ AUTH_ACCESS_COOKIE = "rag_access_token"
 AUTH_REFRESH_COOKIE = "rag_refresh_token"
 AUTH_USERNAME_COOKIE = "rag_username"
 AUTH_ROLE_COOKIE = "rag_role"
+LOGOUT_QUERY_PARAM = "logged_out"
 AUTH_COOKIE_MAX_AGE_SECONDS = int(os.getenv("RAG_AUTH_COOKIE_MAX_AGE_SECONDS", 7 * 24 * 60 * 60))
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
 ADMIN_ROLES = {"admin"}
@@ -46,6 +47,7 @@ DEFAULT_SESSION = {
     "refresh_token": None,
     "username": None,
     "role": None,
+    "logged_out": False,
     "chat_id": None,
     "history": [],
     "users": {},
@@ -120,10 +122,10 @@ for key, value in DEFAULT_SESSION.items():
         st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
 
 
-def reset_session():
+def reset_session(reload_page=False):
     for key, value in DEFAULT_SESSION.items():
         st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
-    clear_auth_cookies()
+    clear_auth_cookies(reload_page=reload_page)
 
 
 def cookie_value(name):
@@ -159,22 +161,49 @@ def sync_auth_cookies():
     )
 
 
-def clear_auth_cookies():
+def clear_auth_cookies(reload_page=False):
     components.html(
         f"""
         <script>
         let targetDocument = document;
+        let targetWindow = window;
         try {{
             targetDocument = window.parent.document;
+            targetWindow = window.parent;
         }} catch (error) {{}}
         for (const name of {json.dumps([AUTH_ACCESS_COOKIE, AUTH_REFRESH_COOKIE, AUTH_USERNAME_COOKIE, AUTH_ROLE_COOKIE])}) {{
             targetDocument.cookie =
                 `${{name}}=; path=/; max-age=0; SameSite=Lax`;
         }}
+        if ({json.dumps(reload_page)}) {{
+            setTimeout(() => targetWindow.location.reload(), 50);
+        }}
         </script>
         """,
         height=0,
     )
+
+
+def is_logout_route():
+    return st.query_params.get(LOGOUT_QUERY_PARAM) == "1"
+
+
+def mark_logout_route():
+    st.query_params[LOGOUT_QUERY_PARAM] = "1"
+
+
+def clear_logout_route():
+    if LOGOUT_QUERY_PARAM in st.query_params:
+        del st.query_params[LOGOUT_QUERY_PARAM]
+
+
+def logout():
+    reset_session()
+    st.session_state.logged_out = True
+    st.session_state.page = "login"
+    mark_logout_route()
+    st.rerun()
+    st.stop()
 
 
 def auth_headers():
@@ -282,6 +311,12 @@ def request(method, path, auth=True, timeout=60, **kwargs):
 
 
 def restore_auth_session():
+    if st.session_state.logged_out or is_logout_route():
+        st.session_state.logged_out = True
+        st.session_state.page = "login"
+        clear_auth_cookies()
+        return
+
     if st.session_state.token:
         sync_auth_cookies()
         return
@@ -497,6 +532,8 @@ def login_page():
                 st.session_state.refresh_token = data["refresh_token"]
                 st.session_state.username = data.get("username") or username.strip()
                 st.session_state.role = data["role"]
+                st.session_state.logged_out = False
+                clear_logout_route()
                 st.session_state.page = "chat"
                 switch_chat(None)
                 st.rerun()
@@ -565,7 +602,7 @@ def sidebar(chats, chat_id):
                             st.error(error_detail(res))
 
         if st.button("Logout", use_container_width=True):
-            reset_session()
+            logout()
 
         st.divider()
         col1, col2 = st.columns([1, 1])
