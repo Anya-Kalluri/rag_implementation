@@ -1,40 +1,12 @@
-# Architecture Diagram
+# Project Architecture
 
 The application is split into a Streamlit UI, a FastAPI backend, local persistence, document ingestion, retrieval, and LLM generation.
 
-```mermaid
-flowchart TD
-    User[User Browser] --> UI[Streamlit Frontend<br/>frontend/streamlit.py]
-    UI -->|JWT login| AuthAPI[Auth Routes<br/>backend/auth/routes.py]
-    UI -->|Chat, upload, URL, query| RagAPI[RAG Routes<br/>backend/rag/routes.py]
+## Full Project Diagram
 
-    AuthAPI --> Users[(SQLite users<br/>data/rag_app.sqlite3)]
-    RagAPI --> DB[(SQLite app data<br/>chats, files, chunks, events, guest_usage)]
-    RagAPI --> Uploads[(uploads/)]
+![Project architecture diagram](./assets/architecture-diagram.png)
 
-    RagAPI --> Ingestion[Ingestion Pipeline<br/>backend/ingestion/pipeline.py]
-    Ingestion --> Loaders[Loaders<br/>PDF, DOCX, HTML, images, URL content]
-    Ingestion --> Chunking[Smart Chunking]
-    Ingestion --> Embeddings[Sentence Transformer Embeddings]
-    Ingestion --> Chunks[(SQLite chunks)]
-    Ingestion --> VectorIndex[(FAISS indexes)]
-
-    RagAPI --> Retrieval[Retrieval<br/>backend/rag/retrieval.py]
-    Retrieval --> VectorIndex
-    Retrieval --> Chunks
-    Retrieval --> BM25[BM25 lexical fallback]
-
-    RagAPI --> Memory[Chat Memory<br/>backend/utils/chat_memory.py]
-    Memory --> Redis[(Optional Redis)]
-    Memory --> History[(SQLite chat history)]
-
-    RagAPI --> Generator[Generator<br/>backend/rag/generator.py]
-    Generator --> Groq[Groq Chat Completion API]
-    Generator --> Templates[Jinja Prompts<br/>backend/rag/templates]
-
-    RagAPI --> Metrics[Metrics and Audit Logs<br/>backend/utils/metrics.py<br/>backend/utils/logger.py]
-    Metrics --> DB
-```
+Open the standalone viewer: [architecture-diagram.html](./architecture-diagram.html)
 
 ## Request Flow
 
@@ -75,4 +47,3 @@ flowchart TD
 - `backend/rag/generator.py`: prompt rendering and Groq generation.
 - `backend/utils/`: persistence helpers, metrics, audit logs, guest limits, chat memory.
 - `frontend/streamlit.py`: complete UI for login, chats, ingestion, dashboards, and querying.
-
