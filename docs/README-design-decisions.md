@@ -21,14 +21,14 @@ The app separates roles by responsibility:
 - Admins can manage managers, analysts, viewers, and guests.
 - Managers can manage analysts, viewers, and guests.
 - Managers and analysts can ingest content.
-- Viewers and guests can use available files and URLs.
+- Managers, analysts, viewers, and guests can use shared available files and URLs.
 - Guests have a daily query limit.
 
 Backend endpoints enforce these rules even when the frontend hides unavailable controls.
 
 ## Reusable Files and URLs
 
-Uploaded files and ingested URLs are recorded as file metadata. Viewer and guest users can select available sources and process them into their own chat. This preserves chat isolation while allowing a manager or analyst to publish reusable source material.
+Uploaded files and ingested URLs are recorded as file metadata. Managers, analysts, viewers, and guests can select sources shared with their role and process them into their own chat. This preserves chat isolation while allowing an admin, manager, or analyst to publish reusable source material. Admin uploads can be shared separately with managers, analysts, and viewers/guests; manager uploads can be shared with analysts and viewers/guests; analyst uploads can be shared with viewers/guests.
 
 URL reuse is handled as first-class ingestion: when a selected source path starts with `http://` or `https://`, the backend fetches and indexes the URL content instead of treating it like a local upload path.
 

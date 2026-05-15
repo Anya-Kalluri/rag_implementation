@@ -15,7 +15,7 @@ from backend.utils.chat_history import load_history, save_history
 from backend.utils.chat_memory import prepare_chat_memory
 from backend.utils.chat_registry import create_chat, delete_chat, get_chats, rename_chat
 from backend.utils.chat_titles import auto_update_chat_title, repair_unprofessional_chat_title
-from backend.utils.file_metadata import add_file, get_file_by_key, get_files
+from backend.utils.file_metadata import add_file, get_file_by_key, get_files, normalize_shared_roles
 from backend.utils.logger import load_events, log_event
 from backend.utils.metrics import load as load_metrics
 from backend.utils.metrics import log_error, log_query, log_upload
@@ -26,6 +26,13 @@ router = APIRouter()
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
 AUDIT_ROLES = {"admin", "manager"}
+DEFAULT_SHARED_ROLES = ["manager", "analyst", "viewer", "guest"]
+SHARED_LIBRARY_ROLES = set(DEFAULT_SHARED_ROLES)
+UPLOAD_SHARE_TARGETS = {
+    "admin": DEFAULT_SHARED_ROLES,
+    "manager": ["analyst", "viewer", "guest"],
+    "analyst": ["viewer", "guest"],
+}
 
 
 class QueryRequest(BaseModel):
@@ -50,6 +57,31 @@ class UrlIngestRequest(BaseModel):
 
 def tokenize(text):
     return set(TOKEN_RE.findall(str(text or "").lower()))
+
+
+def parse_shared_roles(raw_roles):
+    if raw_roles is None or not str(raw_roles).strip():
+        return None
+    return normalize_shared_roles(str(raw_roles).split(","))
+
+
+def upload_shared_roles_for(role, requested_roles, is_shared):
+    allowed_targets = UPLOAD_SHARE_TARGETS.get(role, [])
+    if not is_shared:
+        return []
+
+    if requested_roles is None:
+        return allowed_targets.copy()
+
+    return [target for target in requested_roles if target in allowed_targets]
+
+
+def can_access_available_file(source, username, role):
+    if role == "admin" or source.get("uploaded_by") == username:
+        return True
+    if not source.get("is_shared"):
+        return False
+    return role in normalize_shared_roles(source.get("shared_roles"))
 
 
 def score_retrieval(query, chunks, answer):
@@ -154,6 +186,7 @@ async def upload_file(
     file_type: str = "",
     chat_id: str = "",
     is_shared: bool = True,
+    shared_roles: str = "",
     user=Depends(get_current_user),
 ):
     start_time = time.time()
@@ -179,6 +212,9 @@ async def upload_file(
 
     filename = os.path.basename(file.filename or "upload")
     temp_path = os.path.join("uploads", f"temp_{username}_{chat_id}_{int(time.time() * 1000)}_{filename}")
+    allowed_shared_roles = parse_shared_roles(shared_roles)
+    allowed_shared_roles = upload_shared_roles_for(role, allowed_shared_roles, is_shared)
+    is_shared = bool(allowed_shared_roles)
 
     try:
         os.makedirs("uploads", exist_ok=True)
@@ -211,7 +247,15 @@ async def upload_file(
                 detail="No text chunks were created. Check the file type/content and backend logs.",
             )
 
-        add_file(filename, username, role, chat_id, file_path, is_shared=is_shared)
+        add_file(
+            filename,
+            username,
+            role,
+            chat_id,
+            file_path,
+            is_shared=is_shared,
+            shared_roles=allowed_shared_roles,
+        )
 
         latency_ms = (time.time() - start_time) * 1000
         log_upload(
@@ -237,6 +281,7 @@ async def upload_file(
             "chat_title": chat_title,
             "chunks": chunks,
             "is_shared": is_shared,
+            "shared_roles": allowed_shared_roles,
             "latency_ms": round(latency_ms, 2),
         }
 
@@ -267,13 +312,12 @@ async def upload_file(
 
 @router.get("/available-files")
 def available_files(user=Depends(get_current_user)):
+    username = user["sub"].strip()
     role = user["role"].strip()
     files = [
         item for item in get_files()
-        if not item.get("source_path")
+        if not item.get("source_path") and can_access_available_file(item, username, role)
     ]
-    if role not in {"viewer", "guest"}:
-        files = [item for item in files if item.get("is_shared")]
     return {"files": files}
 
 
@@ -289,7 +333,7 @@ def process_existing_file(req: ProcessExistingFileRequest, user=Depends(get_curr
     if not source or source.get("source_path"):
         raise HTTPException(status_code=404, detail="File not found")
 
-    if role in {"viewer", "guest"} and not source.get("is_shared"):
+    if not can_access_available_file(source, username, role):
         raise HTTPException(status_code=403, detail="No permission to query this file")
 
     existing = get_files(username, req.chat_id)

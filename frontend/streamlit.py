@@ -16,6 +16,8 @@ AUTH_ROLE_COOKIE = "rag_role"
 LOGOUT_QUERY_PARAM = "logged_out"
 AUTH_COOKIE_MAX_AGE_SECONDS = int(os.getenv("RAG_AUTH_COOKIE_MAX_AGE_SECONDS", 7 * 24 * 60 * 60))
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
+DEFAULT_SHARED_ROLES = ["manager", "analyst", "viewer", "guest"]
+SHARED_LIBRARY_ROLES = set(DEFAULT_SHARED_ROLES)
 ADMIN_ROLES = {"admin"}
 USER_MANAGEMENT_ROLES = {"admin", "manager"}
 MANAGER_MANAGED_ROLES = ["analyst", "viewer", "guest"]
@@ -1043,7 +1045,10 @@ def load_users(show_errors=True):
 
 
 def process_available_file(file_item, chat_id):
-    if not file_item.get("is_shared"):
+    role = (st.session_state.role or "").strip().lower()
+    owner = file_item.get("uploaded_by") == st.session_state.username
+    allowed_roles = file_item.get("shared_roles") or (DEFAULT_SHARED_ROLES if file_item.get("is_shared") else [])
+    if role != "admin" and not owner and (not file_item.get("is_shared") or role not in allowed_roles):
         st.sidebar.warning("No permission to query this file.")
         return
     try:
@@ -1065,6 +1070,13 @@ def process_available_file(file_item, chat_id):
         }
         st.rerun()
     st.sidebar.error(f"Could not prepare file: {error_detail(res)}")
+
+
+def available_file_label(item):
+    filename = item.get("file", "Untitled file")
+    owner = item.get("uploaded_by", "unknown")
+    role = item.get("role", "")
+    return f"{filename} | {owner} | {role}".strip(" |")
 
 
 def load_history(chat_id):
@@ -1344,10 +1356,36 @@ def sidebar(chats, chat_id):
                 unsafe_allow_html=True,
             )
 
-        # Available shared files
-        if st.session_state.role in {"viewer", "guest"}:
+        available_files = None
+
+        if st.session_state.role == "admin":
             st.markdown("<hr style='margin: 0.9rem 0;'/>", unsafe_allow_html=True)
             available_files = load_available_files()
+            section_header(IC_CLOUD, "All Uploaded Files", count=len(available_files))
+            if available_files:
+                selected_file_key = st.selectbox(
+                    "Choose a file to query",
+                    [item.get("file_key") for item in available_files],
+                    format_func=lambda key: available_file_label(
+                        next((item for item in available_files if item.get("file_key") == key), {})
+                    ),
+                    label_visibility="collapsed",
+                    key=f"admin_file_picker_{chat_id}",
+                )
+                selected_file = next(
+                    (item for item in available_files if item.get("file_key") == selected_file_key),
+                    None,
+                )
+                if selected_file and st.button("Use selected file in this chat", key=f"admin_use_file_{chat_id}", use_container_width=True):
+                    process_available_file(selected_file, chat_id)
+            else:
+                st.caption("No uploaded files yet.")
+
+        # Available shared files
+        if st.session_state.role in SHARED_LIBRARY_ROLES:
+            st.markdown("<hr style='margin: 0.9rem 0;'/>", unsafe_allow_html=True)
+            if available_files is None:
+                available_files = load_available_files()
             section_header(IC_CLOUD, "Shared Library", count=len(available_files))
 
             if available_files:
@@ -1380,18 +1418,20 @@ def sidebar(chats, chat_id):
             st.markdown("<hr style='margin: 0.9rem 0;'/>", unsafe_allow_html=True)
             section_header(IC_SHIELD, "Audit")
 
-            with st.expander("Uploaded Files", expanded=False):
-                audit_files = load_audit("/audit/files", "files")
-                if audit_files:
-                    for item in audit_files[:25]:
-                        st.write(item.get("file", "Untitled file"))
-                        st.caption(
-                            f"{item.get('uploaded_by', '')} | "
-                            f"{item.get('role', '')} | "
-                            f"{item.get('chat_id', '')}"
-                        )
+            with st.expander("Manager and Analyst Files", expanded=False):
+                if available_files is None:
+                    available_files = load_available_files()
+                staff_files = [
+                    item for item in available_files
+                    if item.get("role") in {"manager", "analyst"}
+                ]
+                if staff_files:
+                    for item in staff_files[:25]:
+                        label = available_file_label(item)
+                        if st.button(label, key=f"audit_use_file_{item.get('file_key')}_{chat_id}", use_container_width=True):
+                            process_available_file(item, chat_id)
                 else:
-                    st.caption("No file records.")
+                    st.caption("No manager or analyst file records.")
 
             with st.expander("Queries", expanded=False):
                 queries = load_audit("/audit/queries", "queries")
@@ -1460,26 +1500,66 @@ def upload_panel(chat_id):
         with col_share:
             st.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
             st.markdown("**Sharing**")
-            share_file = st.radio(
-                "Allow other users to query this file?",
-                ["Yes", "No"],
-                horizontal=False,
-                index=0,
-                label_visibility="collapsed",
-            )
-            st.caption("Yes — visible to viewers & guests")
+            if st.session_state.role == "admin":
+                share_manager = st.checkbox("Let managers view", value=True)
+                share_analyst = st.checkbox("Let analysts view", value=True)
+                share_viewer_guest = st.checkbox("Let viewers and guests view", value=True)
+                st.caption("Choose one or more roles for the shared library.")
+            elif st.session_state.role == "manager":
+                share_analyst = st.checkbox("Let analysts view", value=True)
+                share_viewer_guest = st.checkbox("Let viewers and guests view", value=True)
+                st.caption("Choose who can use this from the shared library.")
+            elif st.session_state.role == "analyst":
+                share_viewer_guest = st.checkbox("Let viewers and guests view", value=True)
+                st.caption("Choose whether viewers and guests can use this file.")
+            else:
+                share_file = st.radio(
+                    "Allow other users to query this file?",
+                    ["Yes", "No"],
+                    horizontal=False,
+                    index=0,
+                    label_visibility="collapsed",
+                )
+                st.caption("Yes - visible in the shared library")
 
         disabled = uploaded_file is None
         process_col, _ = st.columns([1, 2])
         if process_col.button("Process Document", type="primary", disabled=disabled, use_container_width=True):
             file_type = uploaded_file.name.rsplit(".", 1)[-1].lower()
-            is_shared = share_file == "Yes"
+            if st.session_state.role == "admin":
+                shared_roles = []
+                if share_manager:
+                    shared_roles.append("manager")
+                if share_analyst:
+                    shared_roles.append("analyst")
+                if share_viewer_guest:
+                    shared_roles.extend(["viewer", "guest"])
+                is_shared = bool(shared_roles)
+            elif st.session_state.role == "manager":
+                shared_roles = []
+                if share_analyst:
+                    shared_roles.append("analyst")
+                if share_viewer_guest:
+                    shared_roles.extend(["viewer", "guest"])
+                is_shared = bool(shared_roles)
+            elif st.session_state.role == "analyst":
+                shared_roles = ["viewer", "guest"] if share_viewer_guest else []
+                is_shared = bool(shared_roles)
+            else:
+                is_shared = share_file == "Yes"
+                shared_roles = DEFAULT_SHARED_ROLES if is_shared else []
 
             with st.spinner("Extracting · Chunking · Embedding · Indexing"):
                 try:
                     res = request(
                         "POST",
-                        f"/upload?file_type={file_type}&chat_id={chat_id}&is_shared={str(is_shared).lower()}",
+                        "/upload",
+                        params={
+                            "file_type": file_type,
+                            "chat_id": chat_id,
+                            "is_shared": str(is_shared).lower(),
+                            "shared_roles": ",".join(shared_roles),
+                        },
                         files={
                             "file": (
                                 uploaded_file.name,
@@ -1500,6 +1580,7 @@ def upload_panel(chat_id):
                     "chunks": data.get("chunks", 0),
                     "chat_id": data.get("chat_id", chat_id),
                     "is_shared": data.get("is_shared", is_shared),
+                    "shared_roles": data.get("shared_roles", shared_roles),
                 }
                 st.session_state.uploaded_file_key += 1
                 st.rerun()

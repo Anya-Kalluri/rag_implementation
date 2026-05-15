@@ -1,7 +1,11 @@
 import time
 from hashlib import sha256
 
-from backend.db import connect, init_db
+from backend.db import connect, decode, encode, init_db
+
+
+SHARED_LIBRARY_ROLES = {"manager", "analyst", "viewer", "guest"}
+DEFAULT_SHARED_ROLES = ["manager", "analyst", "viewer", "guest"]
 
 
 FILE_COLUMNS = [
@@ -12,6 +16,7 @@ FILE_COLUMNS = [
     "chat_id",
     "path",
     "is_shared",
+    "shared_roles_json",
     "source_file",
     "source_uploaded_by",
     "source_role",
@@ -31,15 +36,38 @@ def file_key(item):
 
 
 def row_to_file(row):
-    return {column: row[column] for column in FILE_COLUMNS if column in row.keys()}
+    item = {column: row[column] for column in FILE_COLUMNS if column in row.keys()}
+    item["shared_roles"] = normalize_shared_roles(
+        decode(item.get("shared_roles_json"), DEFAULT_SHARED_ROLES)
+    )
+    return item
 
 
-def add_file(filename, user, role, chat_id, path, source=None, is_shared=True):
+def normalize_shared_roles(roles):
+    if roles is None:
+        return DEFAULT_SHARED_ROLES.copy()
+    if isinstance(roles, str):
+        roles = roles.split(",")
+
+    normalized = []
+    for role in roles:
+        value = str(role).strip().lower()
+        if value in SHARED_LIBRARY_ROLES and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def add_file(filename, user, role, chat_id, path, source=None, is_shared=True, shared_roles=None):
     init_db()
     user = user.strip()
     role = role.strip()
     source = source or {}
     source_path = source.get("path", path)
+    if shared_roles is None and source.get("shared_roles") is not None:
+        shared_roles = source.get("shared_roles")
+    if shared_roles is None:
+        shared_roles = DEFAULT_SHARED_ROLES if is_shared else []
+    shared_roles = normalize_shared_roles(shared_roles)
 
     item = {
         "file": filename,
@@ -48,6 +76,7 @@ def add_file(filename, user, role, chat_id, path, source=None, is_shared=True):
         "chat_id": chat_id,
         "path": path,
         "is_shared": 1 if is_shared else 0,
+        "shared_roles_json": encode(shared_roles),
         "source_file": source.get("file"),
         "source_uploaded_by": source.get("uploaded_by"),
         "source_role": source.get("role"),
@@ -70,11 +99,11 @@ def add_file(filename, user, role, chat_id, path, source=None, is_shared=True):
         conn.execute(
             """
             INSERT INTO files (
-                file_key, file, uploaded_by, role, chat_id, path, is_shared,
+                file_key, file, uploaded_by, role, chat_id, path, is_shared, shared_roles_json,
                 source_file, source_uploaded_by, source_role, source_chat_id,
                 source_path, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["file_key"],
@@ -84,6 +113,7 @@ def add_file(filename, user, role, chat_id, path, source=None, is_shared=True):
                 item["chat_id"],
                 item["path"],
                 item["is_shared"],
+                item["shared_roles_json"],
                 item["source_file"],
                 item["source_uploaded_by"],
                 item["source_role"],

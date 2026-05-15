@@ -74,6 +74,7 @@ def init_db():
                 chat_id TEXT NOT NULL,
                 path TEXT NOT NULL,
                 is_shared INTEGER NOT NULL DEFAULT 1,
+                shared_roles_json TEXT NOT NULL DEFAULT '["manager","analyst","viewer","guest"]',
                 source_file TEXT,
                 source_uploaded_by TEXT,
                 source_role TEXT,
@@ -146,6 +147,14 @@ def init_db():
         if "is_shared" not in file_columns:
             conn.execute(
                 "ALTER TABLE files ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 1"
+            )
+        if "shared_roles_json" not in file_columns:
+            conn.execute(
+                """
+                ALTER TABLE files
+                ADD COLUMN shared_roles_json TEXT NOT NULL
+                DEFAULT '["manager","analyst","viewer","guest"]'
+                """
             )
 
         chat_columns = {

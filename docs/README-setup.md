@@ -92,7 +92,8 @@ Upload a document:
 1. Log in as `admin`, `manager`, or `analyst`.
 2. Create or open a chat.
 3. Use the Ingestion panel to upload a supported file.
-4. Ask questions in the chat input.
+4. Admins can choose whether managers, analysts, and viewers/guests can see the file in the shared library. Managers can share with analysts and viewers/guests; analysts can share with viewers/guests.
+5. Ask questions in the chat input.
 
 Ingest a URL:
 
@@ -103,7 +104,7 @@ Ingest a URL:
 
 Guest usage:
 
-- Guests can select available files or URLs.
+- Managers, analysts, viewers, and guests can select shared available files or URLs.
 - Guests are limited by `GUEST_QUERY_LIMIT`, which defaults to 5 queries per day.
 - The UI shows how many guest queries have been used and when no more are available.
 
