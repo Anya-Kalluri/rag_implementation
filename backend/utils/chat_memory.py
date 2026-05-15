@@ -1,3 +1,9 @@
+"""Chat-summary memory helpers.
+
+Long chats are summarized every few user prompts so the generator can keep
+useful conversation context without sending the entire history each time.
+"""
+
 import time
 
 from backend.config.settings import CHAT_SUMMARY_THRESHOLD, REDIS_URL
@@ -15,6 +21,7 @@ REDIS_PREFIX = "rag:chat_summary"
 
 
 def _redis_client():
+    """Return a live Redis client when Redis is configured and reachable."""
     if redis is None or not REDIS_URL:
         return None
 
@@ -27,18 +34,22 @@ def _redis_client():
 
 
 def _cache_key(user, chat_id):
+    """Build the Redis cache key for one chat summary."""
     return f"{REDIS_PREFIX}:{user}:{chat_id}"
 
 
 def _state_key(user, chat_id):
+    """Build the SQLite app_state key for one chat summary."""
     return f"chat_summary:{user}:{chat_id}"
 
 
 def _load_state(user, chat_id):
+    """Load persisted summary state from SQLite."""
     return get_state(_state_key(user, chat_id), {}) or {}
 
 
 def _save_state(user, chat_id, state):
+    """Persist summary state and mirror the latest summary into Redis."""
     state["updated_at"] = time.time()
     set_state(_state_key(user, chat_id), state)
 
@@ -48,6 +59,7 @@ def _save_state(user, chat_id, state):
 
 
 def _cached_summary(user, chat_id, fallback=""):
+    """Read the Redis summary cache, falling back to SQLite state."""
     client = _redis_client()
     if not client:
         return fallback
@@ -59,10 +71,12 @@ def _cached_summary(user, chat_id, fallback=""):
 
 
 def user_prompt_count(history):
+    """Count user turns, which drive the summarization threshold."""
     return sum(1 for message in history if message.get("role") == "user")
 
 
 def prepare_chat_memory(user, chat_id, history):
+    """Return the current chat summary and metrics, updating it when needed."""
     threshold = max(int(CHAT_SUMMARY_THRESHOLD or 0), 1)
     state = _load_state(user, chat_id)
     summarized_prompts = int(state.get("summarized_prompts", 0) or 0)
@@ -80,17 +94,21 @@ def prepare_chat_memory(user, chat_id, history):
     }
 
     if prompt_count < threshold:
+        # Below the threshold, reuse the existing summary and skip an LLM call.
         metrics["chat_summarized_prompts"] = summarized_prompts
         return summary, metrics
 
     should_summarize_until = (prompt_count // threshold) * threshold
     if should_summarize_until <= summarized_prompts:
+        # This chat has already been summarized through the current threshold.
         metrics["chat_summarized_prompts"] = summarized_prompts
         return summary, metrics
 
     messages_to_summarize = []
     seen_user_prompts = 0
     for message in history:
+        # Include complete turns up to the threshold boundary so the summary is
+        # stable and does not repeatedly summarize the same partial window.
         if message.get("role") == "user":
             if seen_user_prompts >= should_summarize_until:
                 break

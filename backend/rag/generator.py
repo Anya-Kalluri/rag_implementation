@@ -1,3 +1,5 @@
+"""Prompt rendering and LLM generation helpers."""
+
 from langchain_core.output_parsers import StrOutputParser
 
 from backend.config.settings import (
@@ -23,6 +25,7 @@ OPENAI_COMPATIBLE_PROVIDERS = {
 
 
 def _missing_package_error(provider, package):
+    """Build a clear error when the selected LLM provider package is absent."""
     return RuntimeError(
         f"LLM_PROVIDER='{provider}' requires the '{package}' package. "
         "Install dependencies with: pip install -r requirements.txt"
@@ -30,6 +33,7 @@ def _missing_package_error(provider, package):
 
 
 def _chat_model_class(provider):
+    """Return the LangChain chat model class for the configured provider."""
     if provider == "groq":
         try:
             from langchain_groq import ChatGroq
@@ -67,6 +71,7 @@ def _chat_model_class(provider):
 
 
 def _chat_model_kwargs(provider, model, temperature):
+    """Build provider-specific initialization kwargs for a chat model."""
     kwargs = {
         "api_key": LLM_API_KEY,
         "model": model,
@@ -92,6 +97,7 @@ def _chat_model_kwargs(provider, model, temperature):
 
 
 def get_llm(temperature=0.2, model=RAG_LLM_MODEL):
+    """Create or reuse a cached LangChain chat model instance."""
     provider = LLM_PROVIDER
     if not LLM_API_KEY:
         raise RuntimeError("LLM_API_KEY is missing. Check your .env file.")
@@ -105,6 +111,7 @@ def get_llm(temperature=0.2, model=RAG_LLM_MODEL):
 
 
 def _empty_metrics(model=RAG_LLM_MODEL):
+    """Return the standard generation metrics shape."""
     return {
         "model": model,
         "prompt_tokens": 0,
@@ -115,6 +122,7 @@ def _empty_metrics(model=RAG_LLM_MODEL):
 
 
 def _record_usage(metrics, message):
+    """Copy token usage from a provider response into metrics."""
     usage = getattr(message, "usage_metadata", None) or {}
     if usage:
         metrics["prompt_tokens"] = int(usage.get("input_tokens", 0) or 0)
@@ -131,10 +139,12 @@ def _record_usage(metrics, message):
 
 
 def _message_content(message):
+    """Normalize a LangChain model response into plain text."""
     return output_parser.invoke(message)
 
 
 def summarize_chat_messages(messages, existing_summary=""):
+    """Summarize prior chat turns for long-conversation memory."""
     metrics = _empty_metrics()
 
     if not messages:
@@ -171,6 +181,7 @@ def summarize_chat_messages(messages, existing_summary=""):
 
 
 def generate(query, chunks, chat_summary=""):
+    """Generate a grounded answer from retrieved chunks and chat summary."""
     metrics = _empty_metrics()
 
     # -------------------------------

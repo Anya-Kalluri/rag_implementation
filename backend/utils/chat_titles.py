@@ -1,3 +1,5 @@
+"""Heuristics for generating readable chat titles from files and chunks."""
+
 import os
 import re
 import time
@@ -117,6 +119,7 @@ NOISY_VALUE_WORDS = {
 
 
 def _readable_text(value):
+    """Turn paths, URLs, and filenames into token-friendly display text."""
     text = str(value or "")
     if text.startswith(("http://", "https://")):
         parsed = urlparse(text)
@@ -128,6 +131,7 @@ def _readable_text(value):
 
 
 def _keywords_from_text(text):
+    """Extract useful title keywords while skipping generic/filler words."""
     keywords = []
     for word in WORD_RE.findall(_readable_text(text)):
         key = word.lower()
@@ -140,16 +144,19 @@ def _keywords_from_text(text):
 
 
 def _format_title(keywords):
+    """Format keywords as a human-friendly title, preserving known acronyms."""
     return " ".join(word.upper() if word in ACRONYMS or word.isupper() else word.title() for word in keywords)
 
 
 def _file_extension(value):
+    """Return a source extension from either a local path or URL."""
     path = urlparse(str(value or "")).path if str(value or "").startswith(("http://", "https://")) else str(value or "")
     extension = os.path.splitext(path)[1].lstrip(".").lower()
     return extension
 
 
 def _title_from_file_name(value):
+    """Build a three-word title from a file name plus file-type hints."""
     keywords = _keywords_from_text(value)
     if not keywords:
         return None
@@ -172,6 +179,7 @@ def _title_from_file_name(value):
 
 
 def _best_file_title(files):
+    """Choose the first good title candidate from current/source filenames."""
     for item in files:
         for value in (item.get("file"), item.get("source_file")):
             title = _title_from_file_name(value)
@@ -181,6 +189,7 @@ def _best_file_title(files):
 
 
 def _chunk_snippets(user, chat_id, limit=5):
+    """Load early chunk text snippets as a fallback title source."""
     init_db()
     with connect() as conn:
         rows = conn.execute(
@@ -198,6 +207,7 @@ def _chunk_snippets(user, chat_id, limit=5):
 
 
 def suggest_chat_title(user, chat_id, latest_query=""):
+    """Suggest a title from files first, then from indexed chunk content."""
     files = get_files(user=user, chat_id=chat_id)
     file_title = _best_file_title(files)
     if file_title:
@@ -229,6 +239,7 @@ def suggest_chat_title(user, chat_id, latest_query=""):
 
 
 def auto_update_chat_title(user, chat_id, latest_query=""):
+    """Apply a suggested title if the chat is still auto-title managed."""
     title = suggest_chat_title(user, chat_id, latest_query=latest_query)
     if not title:
         return None
@@ -237,11 +248,13 @@ def auto_update_chat_title(user, chat_id, latest_query=""):
 
 
 def title_has_filler_word(title):
+    """Return True when a title contains words that usually read poorly."""
     words = {word.lower() for word in WORD_RE.findall(str(title or ""))}
     return bool(words & TITLE_FILLER_WORDS)
 
 
 def repair_unprofessional_chat_title(user, chat_id, current_title):
+    """Replace a weak generated title with a better file-derived title."""
     replacement = _best_file_title(get_files(user=user, chat_id=chat_id))
     if not replacement or replacement == current_title:
         return None

@@ -4,9 +4,7 @@ The application is split into a Streamlit UI, a FastAPI backend, local persisten
 
 ## Full Project Diagram
 
-![Project architecture diagram](./assets/architecture-diagram.png)
-
-Open the standalone viewer: [architecture-diagram.html](./architecture-diagram.html)
+![Project architecture diagram](./docs/rag_architecture.png)
 
 ## Request Flow
 

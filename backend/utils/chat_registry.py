@@ -1,3 +1,5 @@
+"""Chat registry helpers for creating, listing, deleting, and naming chats."""
+
 import time
 import uuid
 
@@ -5,6 +7,7 @@ from backend.db import connect, init_db
 
 
 def create_chat(user):
+    """Create a new chat workspace for a user and return its chat_id."""
     init_db()
     chat_id = str(uuid.uuid4())
     now = time.time()
@@ -27,6 +30,7 @@ def create_chat(user):
 
 
 def get_chats(user):
+    """List a user's chats in newest-first order."""
     init_db()
     with connect() as conn:
         rows = conn.execute(
@@ -53,6 +57,7 @@ def get_chats(user):
 
 
 def delete_chat(user, chat_id):
+    """Delete a chat registry entry and its saved conversation history."""
     init_db()
     with connect() as conn:
         conn.execute(
@@ -66,6 +71,7 @@ def delete_chat(user, chat_id):
 
 
 def rename_chat(user, chat_id, new_title):
+    """Rename a chat manually and prevent future automatic title changes."""
     init_db()
     with connect() as conn:
         conn.execute(
@@ -79,6 +85,7 @@ def rename_chat(user, chat_id, new_title):
 
 
 def auto_rename_chat(user, chat_id, new_title):
+    """Rename a chat only while it is still marked as auto-title managed."""
     title = str(new_title or "").strip()
     if not title:
         return None

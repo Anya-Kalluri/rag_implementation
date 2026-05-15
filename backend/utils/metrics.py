@@ -1,3 +1,5 @@
+"""Application-level metrics aggregation stored in app_state."""
+
 import time
 
 from backend.db import get_state, set_state
@@ -36,6 +38,7 @@ DEFAULT_METRICS = {
 
 
 def _merge_defaults(data, defaults):
+    """Merge saved metrics with defaults so new fields appear after upgrades."""
     merged = defaults.copy()
 
     for key, value in data.items():
@@ -48,21 +51,25 @@ def _merge_defaults(data, defaults):
 
 
 def load():
+    """Load metrics with all expected default keys present."""
     return _merge_defaults(get_state("metrics", {}) or {}, DEFAULT_METRICS)
 
 
 def save(data):
+    """Persist metrics and stamp the update time."""
     data["updated_at"] = time.time()
     set_state("metrics", data)
 
 
 def estimate_cost(prompt_tokens=0, completion_tokens=0):
+    """Estimate Groq llama-3.1-8b cost from token counts."""
     input_cost = (prompt_tokens / 1_000_000) * GROQ_LLAMA_3_1_8B_INPUT_PER_1M
     output_cost = (completion_tokens / 1_000_000) * GROQ_LLAMA_3_1_8B_OUTPUT_PER_1M
     return input_cost + output_cost
 
 
 def log_upload(file=None, user=None, chat_id=None, chunks=0, latency_ms=0.0):
+    """Record aggregate upload metrics plus the latest upload snapshot."""
     data = load()
     data["uploads"] += 1
     data["last_upload"] = {
@@ -77,6 +84,7 @@ def log_upload(file=None, user=None, chat_id=None, chunks=0, latency_ms=0.0):
 
 
 def log_query(stats=None):
+    """Record query latency, token, model, and retrieval-quality metrics."""
     stats = stats or {}
     data = load()
     data["queries"] += 1
@@ -117,6 +125,7 @@ def log_query(stats=None):
     retrieval["last_recall_proxy"] = round(recall, 4)
     retrieval["last_response_relevance"] = round(relevance, 4)
     retrieval["avg_precision_at_k"] = round(
+        # Online average avoids storing every historical query score.
         ((retrieval["avg_precision_at_k"] * (evaluated - 1)) + precision) / evaluated,
         4,
     )
@@ -145,6 +154,7 @@ def log_query(stats=None):
 
 
 def log_error(error_type, detail=None):
+    """Increment error counters and keep the latest error detail."""
     data = load()
     data["errors"] += 1
     data["last_error"] = {

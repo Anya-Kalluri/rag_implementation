@@ -1,3 +1,5 @@
+"""Authentication primitives: password hashing, user loading, and JWT tokens."""
+
 import os
 from datetime import datetime, timedelta
 
@@ -14,12 +16,16 @@ from backend.db import connect, init_db
 
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+# The app keeps an in-memory user cache for quick auth checks, but SQLite remains
+# the source of truth. refresh_users() synchronizes the cache from the database.
 fake_users_db = {}
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
 
 def load_users():
+    """Load all user records from SQLite into a dictionary keyed by username."""
     init_db()
     with connect() as conn:
         rows = conn.execute(
@@ -37,6 +43,7 @@ def load_users():
 
 
 def refresh_users():
+    """Refresh the in-memory auth cache and bootstrap an admin if the DB is empty."""
     fake_users_db.clear()
     fake_users_db.update(load_users())
 
@@ -47,6 +54,7 @@ def refresh_users():
 
 
 def save_users():
+    """Persist the in-memory user cache back to SQLite."""
     init_db()
     with connect() as conn:
         conn.execute("DELETE FROM users")
@@ -61,6 +69,7 @@ def save_users():
 
 
 def bootstrap_admin_user():
+    """Create the first admin account from environment defaults when needed."""
     admin_username = os.getenv("ADMIN_USERNAME", "admin").strip()
     admin_password = os.getenv("ADMIN_PASSWORD", "admin").strip()
 
@@ -76,10 +85,12 @@ def bootstrap_admin_user():
 
 
 def hash_password(password: str):
+    """Hash a plaintext password before storing it."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str):
+    """Verify a plaintext password against a stored password hash."""
     return pwd_context.verify(plain, hashed)
 
 
@@ -88,6 +99,7 @@ def create_token(
     expires_delta: timedelta | None = None,
     token_type: str = ACCESS_TOKEN_TYPE,
 ):
+    """Create a signed JWT with a token type and expiry timestamp."""
     to_encode = data.copy()
     to_encode["token_type"] = token_type
     to_encode["exp"] = datetime.utcnow() + (
@@ -97,6 +109,7 @@ def create_token(
 
 
 def create_access_token(data: dict):
+    """Create a short-lived token used for normal authenticated API calls."""
     return create_token(
         data,
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -105,6 +118,7 @@ def create_access_token(data: dict):
 
 
 def create_refresh_token(data: dict):
+    """Create a longer-lived token used to obtain a new access token."""
     return create_token(
         data,
         expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
@@ -113,10 +127,12 @@ def create_refresh_token(data: dict):
 
 
 def decode_token(token: str):
+    """Decode a JWT and return None instead of raising on invalid tokens."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
 
+# Populate the auth cache at import time so route handlers can validate users.
 refresh_users()

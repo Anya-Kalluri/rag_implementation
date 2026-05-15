@@ -1,3 +1,9 @@
+"""Hybrid retrieval over chat-scoped RAG chunks.
+
+Retrieval combines FAISS semantic search with BM25 keyword search, then applies
+a lightweight overlap reranker before returning source chunks to the generator.
+"""
+
 import re
 from typing import Any
 
@@ -15,10 +21,12 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
 
 def tokenize(text):
+    """Tokenize text into lowercase alphanumeric terms for lexical matching."""
     return TOKEN_RE.findall(str(text or "").lower())
 
 
 def load_chunks(user, chat):
+    """Load chunk metadata for one user/chat from SQLite."""
     init_db()
     with connect() as conn:
         rows = conn.execute(
@@ -42,6 +50,7 @@ def load_chunks(user, chat):
 
 
 def load_store(user, chat):
+    """Load the FAISS index and chunk metadata for one user/chat."""
     try:
         index = read_index(user, chat)
     except Exception as e:
@@ -61,6 +70,7 @@ def load_store(user, chat):
 
 
 def normalize_scores(scores):
+    """Normalize a score array to the 0..1 range for score blending."""
     scores = np.asarray(scores, dtype="float32")
 
     if scores.size == 0:
@@ -76,6 +86,7 @@ def normalize_scores(scores):
 
 
 def build_query_embedding(query, expected_dim=None):
+    """Embed the query and validate its shape/dimension for FAISS search."""
     try:
         from backend.ingestion.embeddings import get_embeddings
 
@@ -99,6 +110,7 @@ def build_query_embedding(query, expected_dim=None):
 
 
 def _documents_from_meta(meta):
+    """Convert saved chunk dictionaries into LangChain Document objects."""
     documents = []
     for pos, item in enumerate(meta):
         if not isinstance(item, dict):
@@ -123,6 +135,8 @@ def _documents_from_meta(meta):
 
 
 class FaissSemanticRetriever(BaseRetriever):
+    """LangChain retriever that searches a FAISS index with query embeddings."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     index: Any = None
@@ -179,6 +193,8 @@ class FaissSemanticRetriever(BaseRetriever):
 
 
 class LangChainBM25RankRetriever(BaseRetriever):
+    """LangChain retriever that performs BM25 keyword ranking over chunks."""
+
     documents: list[Document] = Field(default_factory=list)
     k: int = 20
 
@@ -212,6 +228,8 @@ class LangChainBM25RankRetriever(BaseRetriever):
 
 
 class HybridRetriever(BaseRetriever):
+    """Blend semantic and lexical candidates into one ranked list."""
+
     semantic_retriever: BaseRetriever | None = None
     keyword_retriever: BaseRetriever
     semantic_weight: float = 0.75
@@ -261,6 +279,8 @@ class HybridRetriever(BaseRetriever):
 
 
 class OverlapReranker(BaseRetriever):
+    """Add a small exact-term overlap boost after hybrid retrieval."""
+
     base_retriever: BaseRetriever
     k: int = 5
 
@@ -281,6 +301,7 @@ class OverlapReranker(BaseRetriever):
 
 
 def _doc_to_result(doc):
+    """Convert a LangChain Document into the route-friendly chunk shape."""
     return {
         "id": doc.metadata.get("id"),
         "text": doc.page_content,
@@ -293,6 +314,7 @@ def _doc_to_result(doc):
 
 
 def rerank(query, docs):
+    """Legacy dictionary-based overlap reranker kept for compatibility."""
     query_words = set(tokenize(query))
 
     for doc in docs:
@@ -304,6 +326,7 @@ def rerank(query, docs):
 
 
 def unique_docs(docs, limit):
+    """Keep the first unique chunk texts up to limit."""
     seen = set()
     unique = []
 
@@ -322,6 +345,7 @@ def unique_docs(docs, limit):
 
 
 def retrieve(query, role, user, chat, k=5):
+    """Return the top retrieved chunks for one query/user/chat."""
     print("\n========== RETRIEVE DEBUG ==========")
     print("USER:", user)
     print("ROLE:", role)

@@ -1,3 +1,5 @@
+"""Daily query quota tracking for guest users."""
+
 from datetime import datetime
 
 from backend.db import connect, init_db
@@ -5,6 +7,7 @@ from backend.config.settings import GUEST_QUERY_LIMIT
 
 
 def consume_query(username, limit=None):
+    """Consume one guest query allowance and return current usage metadata."""
     init_db()
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -18,6 +21,7 @@ def consume_query(username, limit=None):
         ).fetchone()
 
         if not row or row["date"] != today:
+            # A missing or stale row starts a fresh daily counter.
             count = 0
         else:
             count = int(row["count"] or 0)
@@ -52,4 +56,5 @@ def consume_query(username, limit=None):
 
 
 def check_limit(username, limit=None):
+    """Compatibility helper returning only whether the guest may continue."""
     return consume_query(username, limit)["allowed"]

@@ -1,3 +1,5 @@
+"""File/source metadata persistence helpers."""
+
 import time
 from hashlib import sha256
 
@@ -26,6 +28,7 @@ FILE_COLUMNS = [
 
 
 def file_key(item):
+    """Build a stable short key for a file/source record."""
     raw = "|".join([
         str(item.get("path", "")),
         str(item.get("file", "")),
@@ -36,6 +39,7 @@ def file_key(item):
 
 
 def row_to_file(row):
+    """Convert a SQLite row into the dictionary shape used by API responses."""
     item = {column: row[column] for column in FILE_COLUMNS if column in row.keys()}
     item["shared_roles"] = normalize_shared_roles(
         decode(item.get("shared_roles_json"), DEFAULT_SHARED_ROLES)
@@ -44,6 +48,7 @@ def row_to_file(row):
 
 
 def normalize_shared_roles(roles):
+    """Validate, lowercase, and de-duplicate roles allowed to reuse a source."""
     if roles is None:
         return DEFAULT_SHARED_ROLES.copy()
     if isinstance(roles, str):
@@ -58,6 +63,7 @@ def normalize_shared_roles(roles):
 
 
 def add_file(filename, user, role, chat_id, path, source=None, is_shared=True, shared_roles=None):
+    """Record an uploaded or selected source for a user's chat."""
     init_db()
     user = user.strip()
     role = role.strip()
@@ -86,6 +92,7 @@ def add_file(filename, user, role, chat_id, path, source=None, is_shared=True, s
     item["file_key"] = file_key(item)
 
     with connect() as conn:
+        # Avoid duplicate source rows when the same source is selected again.
         conn.execute(
             """
             DELETE FROM files
@@ -125,6 +132,7 @@ def add_file(filename, user, role, chat_id, path, source=None, is_shared=True, s
 
 
 def get_files(user=None, chat_id=None):
+    """List source metadata, optionally scoped to a user and chat."""
     init_db()
     query = "SELECT * FROM files"
     clauses = []
@@ -150,6 +158,7 @@ def get_files(user=None, chat_id=None):
 
 
 def get_file_by_key(key):
+    """Fetch one source metadata record by its stable file_key."""
     init_db()
     with connect() as conn:
         row = conn.execute(

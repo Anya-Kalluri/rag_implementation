@@ -1,3 +1,5 @@
+"""SQLite database setup and shared persistence utilities."""
+
 import json
 import sqlite3
 import time
@@ -11,10 +13,12 @@ DB_PATH = DATA_DIR / "rag_app.sqlite3"
 
 
 def encode(value):
+    """Serialize Python values as JSON for SQLite text columns."""
     return json.dumps(value, ensure_ascii=False)
 
 
 def decode(value, default=None):
+    """Deserialize JSON text, returning default when data is missing or invalid."""
     if value is None:
         return default
 
@@ -26,6 +30,7 @@ def decode(value, default=None):
 
 @contextmanager
 def connect():
+    """Open a SQLite connection with row dictionaries and auto-commit behavior."""
     DATA_DIR.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -38,6 +43,7 @@ def connect():
 
 
 def init_db():
+    """Create or migrate all SQLite tables used by the application."""
     with connect() as conn:
         conn.executescript(
             """
@@ -144,6 +150,8 @@ def init_db():
             row["name"]
             for row in conn.execute("PRAGMA table_info(files)").fetchall()
         }
+        # Lightweight migrations keep existing local databases usable when new
+        # sharing columns are added.
         if "is_shared" not in file_columns:
             conn.execute(
                 "ALTER TABLE files ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 1"
@@ -161,6 +169,8 @@ def init_db():
             row["name"]
             for row in conn.execute("PRAGMA table_info(chats)").fetchall()
         }
+        # Existing manually named chats should not be overwritten by auto-title
+        # generation after the auto_title column is introduced.
         if "auto_title" not in chat_columns:
             conn.execute(
                 "ALTER TABLE chats ADD COLUMN auto_title INTEGER NOT NULL DEFAULT 1"
@@ -175,6 +185,7 @@ def init_db():
 
 
 def get_state(key, default=None):
+    """Read a JSON value from the generic app_state table."""
     init_db()
     with connect() as conn:
         row = conn.execute(
@@ -186,6 +197,7 @@ def get_state(key, default=None):
 
 
 def set_state(key, value):
+    """Write a JSON value to the generic app_state table."""
     init_db()
     with connect() as conn:
         conn.execute(
@@ -200,4 +212,5 @@ def set_state(key, value):
         )
 
 
+# Ensure the database exists before the rest of the app starts using it.
 init_db()

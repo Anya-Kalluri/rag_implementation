@@ -1,3 +1,5 @@
+"""Notification persistence for admin/manager upload notices."""
+
 from datetime import datetime
 import time
 
@@ -8,6 +10,7 @@ DEFAULT_TARGETS = ("admin", "manager")
 
 
 def load_notifications():
+    """Load notifications grouped by target role."""
     init_db()
     data = {target: [] for target in DEFAULT_TARGETS}
 
@@ -28,6 +31,7 @@ def load_notifications():
 
 
 def save_notifications(data):
+    """Replace all notification rows from an in-memory role mapping."""
     init_db()
     with connect() as conn:
         conn.execute("DELETE FROM notifications")
@@ -43,6 +47,7 @@ def save_notifications(data):
 
 
 def add_notification(username, file_name):
+    """Notify admin and manager roles that a user uploaded a file."""
     init_db()
     entry = {
         "user": username,

@@ -1,5 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+"""Authentication and user-management API routes.
+
+These endpoints issue JWTs, refresh sessions, change passwords, and let higher
+roles manage lower roles according to backend.auth.roles. The route handlers use
+the in-memory user cache from auth.py, which is persisted back to SQLite.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from .auth import *
@@ -10,10 +17,8 @@ router = APIRouter()
 security = HTTPBearer()
 
 
-# -------------------------------
-# AUTH DEPENDENCY (JWT PROTECTION)
-# -------------------------------
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """FastAPI dependency that validates bearer access tokens."""
     token = credentials.credentials
     payload = decode_token(token)
 
@@ -24,6 +29,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 def build_token_response(username: str, role: str):
+    """Return the access/refresh token payload expected by the frontend."""
     payload = {
         "sub": username,
         "role": role,
@@ -37,25 +43,30 @@ def build_token_response(username: str, role: str):
     }
 
 
-# -------------------------------
-# SCHEMAS
-# -------------------------------
 class SignupUser(BaseModel):
+    """Request body for creating a managed user account."""
+
     username: str
     password: str
     role: str = "viewer"
 
 
 class LoginUser(BaseModel):
+    """Request body for username/password login."""
+
     username: str
     password: str
 
 
 class RefreshTokenRequest(BaseModel):
+    """Request body for replacing an expired access token."""
+
     refresh_token: str
 
 
 class TokenResponse(BaseModel):
+    """Response body shared by login and refresh-token endpoints."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -64,16 +75,15 @@ class TokenResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
+    """Request body for changing the current user's password."""
+
     current_password: str
     new_password: str
 
 
-# -------------------------------
-# LOGIN
-# -------------------------------
 @router.post("/login", response_model=TokenResponse)
 def login(user: LoginUser):
-
+    """Validate credentials and return access plus refresh tokens."""
     db_user = fake_users_db.get(user.username)
 
     if not db_user:
@@ -87,6 +97,7 @@ def login(user: LoginUser):
 
 @router.post("/refresh-token", response_model=TokenResponse)
 def refresh_token(req: RefreshTokenRequest):
+    """Use a valid refresh token to issue a fresh access token."""
     payload = decode_token(req.refresh_token)
 
     if not payload or payload.get("token_type") != REFRESH_TOKEN_TYPE:
@@ -102,6 +113,7 @@ def refresh_token(req: RefreshTokenRequest):
 
 @router.post("/change-password")
 def change_password(req: ChangePasswordRequest, user=Depends(get_current_user)):
+    """Change the current user's password after verifying the old password."""
     username = user["sub"]
     db_user = fake_users_db.get(username)
 
@@ -124,17 +136,14 @@ def change_password(req: ChangePasswordRequest, user=Depends(get_current_user)):
     return {"message": "Password changed successfully"}
 
 
-# -------------------------------
-# 🔔 NOTIFICATIONS
-# -------------------------------
-# -------------------------------
-# USER MANAGEMENT
-# -------------------------------
+# User-management endpoints are intentionally limited to admin/manager roles,
+# and can_manage() prevents managers from creating or deleting peers/admins.
 ALLOWED_USER_ROLES = {"manager", "analyst", "viewer", "guest"}
 USER_MANAGEMENT_ROLES = {"admin", "manager"}
 
 
 def public_users_for(role):
+    """Return visible users for an admin/manager without exposing hashes."""
     return {
         username: {
             "username": data["username"],
@@ -144,9 +153,10 @@ def public_users_for(role):
         if role == "admin" or can_manage(role, data["role"])
     }
 
+
 @router.post("/create-user")
 def create_user(new_user: SignupUser, user=Depends(get_current_user)):
-
+    """Create a lower-role user account."""
     current_role = user["role"]
 
     if current_role not in USER_MANAGEMENT_ROLES:
@@ -182,12 +192,9 @@ def create_user(new_user: SignupUser, user=Depends(get_current_user)):
     return {"message": f"{new_user.role} created successfully"}
 
 
-# -------------------------------
-# ❌ DELETE USER
-# -------------------------------
 @router.delete("/delete-user/{username}")
 def delete_user(username: str, user=Depends(get_current_user)):
-
+    """Delete a lower-role user account."""
     current_role = user["role"]
     current_username = user["sub"]
 
@@ -211,20 +218,12 @@ def delete_user(username: str, user=Depends(get_current_user)):
     return {"message": "User deleted successfully"}
 
 
-# -------------------------------
-# 📋 LIST USERS
-# -------------------------------
 @router.get("/users")
 def list_users(user=Depends(get_current_user)):
-
+    """List manageable users for the current admin/manager."""
     role = user["role"]
 
     if role not in USER_MANAGEMENT_ROLES:
         raise HTTPException(status_code=403, detail="Only admin or manager can list users")
 
     return {"users": public_users_for(role)}
-
-
-# -------------------------------
-# 📂 FILE HISTORY
-# -------------------------------

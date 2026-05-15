@@ -1,9 +1,12 @@
+"""Chat history persistence helpers."""
+
 import time
 
 from backend.db import connect, decode, encode, init_db
 
 
 def load_history(user, chat_id):
+    """Return saved conversation history for one user/chat."""
     init_db()
     with connect() as conn:
         row = conn.execute(
@@ -19,6 +22,7 @@ def load_history(user, chat_id):
 
 
 def save_history(user, chat_id, history):
+    """Upsert conversation history for one user/chat."""
     init_db()
     with connect() as conn:
         conn.execute(

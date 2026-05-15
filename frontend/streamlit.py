@@ -1,3 +1,10 @@
+"""Streamlit frontend for the RAG application.
+
+This file contains the browser UI for authentication, chat workspaces, file/URL
+ingestion, reusable sources, audit views, metrics, and question answering. It
+talks to the FastAPI backend through the endpoints listed below.
+"""
+
 import os
 import json
 from datetime import datetime
@@ -9,6 +16,9 @@ import streamlit.components.v1 as components
 
 
 API_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000")
+
+# Auth values are mirrored into browser cookies so a page refresh can restore
+# the Streamlit session without forcing the user through login again.
 AUTH_ACCESS_COOKIE = "rag_access_token"
 AUTH_REFRESH_COOKIE = "rag_refresh_token"
 AUTH_USERNAME_COOKIE = "rag_username"
@@ -22,11 +32,16 @@ ADMIN_ROLES = {"admin"}
 USER_MANAGEMENT_ROLES = {"admin", "manager"}
 MANAGER_MANAGED_ROLES = ["analyst", "viewer", "guest"]
 ADMIN_MANAGED_ROLES = ["manager", "analyst", "viewer", "guest"]
+
+# Kept in sync with backend.ingestion.pipeline.SUPPORTED_FILE_TYPES so the UI
+# only offers extensions that the backend can actually ingest.
 SUPPORTED_UPLOAD_TYPES = [
     "pdf", "docx", "pptx", "csv", "json", "txt", "md", "html", "htm",
     "xlsx", "xls", "png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp",
 ]
 
+# Streamlit session_state keys used across the app. Each rerun starts from this
+# shape, then request handlers and UI callbacks update individual values.
 DEFAULT_SESSION = {
     "page": "login",
     "token": None,
@@ -43,6 +58,7 @@ DEFAULT_SESSION = {
     "editing_chat_id": None,
 }
 
+# Rendered in the UI as a lightweight API reference for operators/admins.
 ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/login", "Purpose": "Authenticate user and return JWT access and refresh tokens"},
     {"Method": "POST", "Endpoint": "/refresh-token", "Purpose": "Exchange a valid refresh token for a new JWT pair"},

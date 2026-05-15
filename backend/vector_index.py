@@ -1,3 +1,5 @@
+"""SQLite-backed persistence helpers for FAISS indexes."""
+
 import time
 
 import faiss
@@ -7,6 +9,7 @@ from backend.db import connect, init_db
 
 
 def read_index(user_id, chat_id):
+    """Load and deserialize the FAISS index for one user/chat, if present."""
     init_db()
     with connect() as conn:
         row = conn.execute(
@@ -26,6 +29,7 @@ def read_index(user_id, chat_id):
 
 
 def write_index(user_id, chat_id, index):
+    """Serialize and upsert a FAISS index for one user/chat."""
     init_db()
     blob = faiss.serialize_index(index).tobytes()
     with connect() as conn:
@@ -42,6 +46,7 @@ def write_index(user_id, chat_id, index):
 
 
 def delete_index(user_id, chat_id):
+    """Remove a stored FAISS index when it must be rebuilt."""
     init_db()
     with connect() as conn:
         conn.execute(
