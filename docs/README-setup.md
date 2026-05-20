@@ -43,6 +43,8 @@ IMAGE_OCR_MODEL=llama-3.2-11b-vision-preview
 
 If `ADMIN_USERNAME` and `ADMIN_PASSWORD` are not set, the app bootstraps an `admin` / `admin` account when no users exist.
 
+RAGAS evaluation is available through `/evaluate-ragas`. It reuses the app's configured LangChain chat model as the evaluator, so keep the same LLM credentials configured. RAGAS metrics such as `context_recall` and `factual_correctness` also need a reference answer in the request.
+
 ## Run Backend
 
 ```powershell
@@ -107,6 +109,34 @@ Guest usage:
 - Managers, analysts, viewers, and guests can select shared available files or URLs.
 - Guests are limited by `GUEST_QUERY_LIMIT`, which defaults to 5 queries per day.
 - The UI shows how many guest queries have been used and when no more are available.
+
+## RAGAS Evaluation
+
+After uploading or selecting a file for a chat, any authenticated user can call the evaluation endpoint with the same JWT used for normal queries:
+
+```powershell
+$body = @{
+  query = "What is this document about?"
+  chat_id = "your-chat-id"
+  reference = "Optional expected answer"
+  metrics = @("faithfulness", "context_precision", "answer_relevancy")
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/evaluate-ragas" `
+  -Headers @{ Authorization = "Bearer <token>" } `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Supported metric names are exposed by:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/evaluate-ragas/metrics" `
+  -Headers @{ Authorization = "Bearer <token>" }
+```
 
 ## Supported Ingestion Types
 

@@ -35,6 +35,13 @@ The application is split into a Streamlit UI, a FastAPI backend, local persisten
 6. Groq generates the answer.
 7. The answer, sources, telemetry, and guest usage metadata are returned to the frontend.
 
+### RAGAS Evaluation
+
+1. Any authenticated user posts a query and `chat_id` to `/evaluate-ragas`, optionally with a reference answer and explicit metric list.
+2. The backend runs the same RAG retrieval and generation path used by `/query`.
+3. Retrieved chunk text, the generated answer, the original query, and the optional reference are converted into a RAGAS `EvaluationDataset`.
+4. RAGAS scores are returned and recorded as a `ragas_evaluation` audit event.
+
 ## Main Modules
 
 - `backend/main.py`: FastAPI app setup and router registration.
@@ -43,5 +50,6 @@ The application is split into a Streamlit UI, a FastAPI backend, local persisten
 - `backend/ingestion/`: file loaders, chunking, embeddings, and FAISS indexing.
 - `backend/rag/retrieval.py`: semantic and lexical retrieval.
 - `backend/rag/generator.py`: prompt rendering and Groq generation.
+- `backend/rag/evaluation.py`: optional RAGAS scoring for generated answers and retrieved contexts.
 - `backend/utils/`: persistence helpers, metrics, audit logs, guest limits, chat memory.
 - `frontend/streamlit.py`: complete UI for login, chats, ingestion, dashboards, and querying.

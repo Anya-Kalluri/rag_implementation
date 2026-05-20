@@ -7,9 +7,11 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import AnyHttpUrl, BaseModel
 
+from backend.auth.roles import ROLE_HIERARCHY
 from backend.auth.routes import get_current_user
 from backend.ingestion.loaders import load_url
 from backend.ingestion.pipeline import SUPPORTED_FILE_TYPES, process_file
+from backend.rag.evaluation import DEFAULT_METRICS, REFERENCE_METRICS, run_ragas_eval
 from backend.rag.pipeline import rag
 from backend.utils.chat_history import load_history, save_history
 from backend.utils.chat_memory import prepare_chat_memory
@@ -25,6 +27,7 @@ from backend.utils.rate_limit import check_rate
 router = APIRouter()
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 UPLOAD_ROLES = {"admin", "manager", "analyst"}
+RAGAS_ROLES = set(ROLE_HIERARCHY)
 AUDIT_ROLES = {"admin", "manager"}
 DEFAULT_SHARED_ROLES = ["manager", "analyst", "viewer", "guest"]
 SHARED_LIBRARY_ROLES = set(DEFAULT_SHARED_ROLES)
@@ -38,6 +41,14 @@ UPLOAD_SHARE_TARGETS = {
 class QueryRequest(BaseModel):
     query: str
     chat_id: str
+
+
+class RagasEvalRequest(BaseModel):
+    query: str
+    chat_id: str
+    answer: str = ""
+    reference: str = ""
+    metrics: list[str] | None = None
 
 
 class RenameRequest(BaseModel):
@@ -576,6 +587,55 @@ def query_rag(req: QueryRequest, user=Depends(get_current_user)):
             "detail": str(e),
         })
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/evaluate-ragas")
+def evaluate_ragas(req: RagasEvalRequest, user=Depends(get_current_user)):
+    username = user["sub"].strip()
+    role = user["role"].strip()
+
+    if role not in RAGAS_ROLES:
+        raise HTTPException(status_code=403, detail="Your role cannot run RAGAS evaluations")
+
+    if not req.query:
+        raise HTTPException(status_code=400, detail="Query required")
+
+    if not req.chat_id:
+        raise HTTPException(status_code=400, detail="chat_id required")
+
+    try:
+        result = run_ragas_eval(
+            query=req.query,
+            role=role,
+            user=username,
+            chat_id=req.chat_id,
+            answer=req.answer,
+            reference=req.reference,
+            metrics=req.metrics,
+        )
+        log_event("ragas_evaluation", {
+            "user": username,
+            "chat_id": req.chat_id,
+            "query": req.query,
+            "metrics": result["ragas"]["metrics"],
+            "scores": result["ragas"]["scores"],
+            "reference_used": result["ragas"]["reference_used"],
+        })
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        log_error("ragas_evaluation_error", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/evaluate-ragas/metrics")
+def ragas_metrics(user=Depends(get_current_user)):
+    return {
+        "default_metrics": list(DEFAULT_METRICS),
+        "reference_metrics": list(REFERENCE_METRICS),
+        "note": "context_recall and factual_correctness require a reference answer.",
+    }
 
 
 @router.post("/ingest-url")

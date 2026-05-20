@@ -19,6 +19,45 @@ if TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 
+def _clean_metadata_value(value):
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value).strip()
+
+
+def _metadata_section(title, entries):
+    lines = []
+    for label, value in entries:
+        cleaned = _clean_metadata_value(value)
+        if cleaned:
+            lines.append(f"{label}: {cleaned}")
+
+    if not lines:
+        return ""
+
+    return f"{title}\n" + "\n".join(lines)
+
+
+def _office_metadata(core_properties, document_type):
+    return _metadata_section(
+        "Document metadata",
+        [
+            ("Document type", document_type),
+            ("Title", getattr(core_properties, "title", None)),
+            ("Subject", getattr(core_properties, "subject", None)),
+            ("Author / creator / made by", getattr(core_properties, "author", None)),
+            ("Last modified by", getattr(core_properties, "last_modified_by", None)),
+            ("Created", getattr(core_properties, "created", None)),
+            ("Modified", getattr(core_properties, "modified", None)),
+            ("Keywords", getattr(core_properties, "keywords", None)),
+            ("Category", getattr(core_properties, "category", None)),
+            ("Comments", getattr(core_properties, "comments", None)),
+        ],
+    )
+
+
 def _rapidocr_image(image):
     try:
         from rapidocr_onnxruntime import RapidOCR
@@ -104,6 +143,24 @@ def _load_pdf_with_pypdf(file):
     file.seek(0)
     reader = PdfReader(file)
     text = []
+    metadata = getattr(reader, "metadata", None)
+    if metadata:
+        text.append(
+            _metadata_section(
+                "Document metadata",
+                [
+                    ("Document type", "PDF document"),
+                    ("Title", metadata.get("/Title")),
+                    ("Author / creator / made by", metadata.get("/Author")),
+                    ("Subject", metadata.get("/Subject")),
+                    ("Creator application", metadata.get("/Creator")),
+                    ("Producer", metadata.get("/Producer")),
+                    ("Created", metadata.get("/CreationDate")),
+                    ("Modified", metadata.get("/ModDate")),
+                    ("Keywords", metadata.get("/Keywords")),
+                ],
+            )
+        )
     for page in reader.pages:
         page_text = page.extract_text() or ""
         if page_text.strip():
@@ -191,18 +248,53 @@ def load_pdf(file):
 def load_docx(file):
     file.seek(0)
     doc = Document(file)
-    return " ".join([p.text for p in doc.paragraphs])
+    parts = [_office_metadata(doc.core_properties, "Word document")]
+    parts.extend(p.text for p in doc.paragraphs if p.text and p.text.strip())
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text and cell.text.strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n".join(part for part in parts if part and part.strip())
 
 
 def load_pptx(file):
     file.seek(0)
     prs = Presentation(file)
-    text = []
-    for s in prs.slides:
+    text = [_office_metadata(prs.core_properties, "PowerPoint presentation")]
+    for slide_number, s in enumerate(prs.slides, start=1):
+        slide_text = []
         for shape in s.shapes:
-            if hasattr(shape, "text"):
-                text.append(shape.text)
-    return " ".join(text)
+            slide_text.extend(_extract_pptx_shape_text(shape))
+        if getattr(s, "has_notes_slide", False):
+            notes = getattr(s.notes_slide, "notes_text_frame", None)
+            notes_text = str(getattr(notes, "text", "") or "").strip()
+            if notes_text:
+                slide_text.append(f"Speaker notes:\n{notes_text}")
+        if slide_text:
+            text.append(f"Slide {slide_number}:\n" + "\n".join(slide_text))
+    return "\n\n".join(part for part in text if part and part.strip())
+
+
+def _extract_pptx_shape_text(shape):
+    parts = []
+
+    if getattr(shape, "has_table", False):
+        for row in shape.table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text and cell.text.strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+
+    if hasattr(shape, "text"):
+        shape_text = str(shape.text or "").strip()
+        if shape_text:
+            parts.append(shape_text)
+
+    if hasattr(shape, "shapes"):
+        for child in shape.shapes:
+            parts.extend(_extract_pptx_shape_text(child))
+
+    return parts
 
 
 def load_csv(file):

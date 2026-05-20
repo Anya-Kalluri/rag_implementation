@@ -7,6 +7,7 @@ talks to the FastAPI backend through the endpoints listed below.
 
 import os
 import json
+from html import escape
 from datetime import datetime
 from urllib.parse import unquote
 
@@ -53,6 +54,10 @@ DEFAULT_SESSION = {
     "history": [],
     "users": {},
     "telemetry": None,
+    "ragas_open": False,
+    "ragas_result": None,
+    "ragas_selected_turn": 0,
+    "ragas_result_turn": None,
     "upload_notice": None,
     "uploaded_file_key": 0,
     "editing_chat_id": None,
@@ -72,6 +77,8 @@ ENDPOINT_DOCS = [
     {"Method": "POST", "Endpoint": "/ingest-url", "Purpose": "Scrape URL, chunk, embed, and index text"},
     {"Method": "GET", "Endpoint": "/files?chat_id=...", "Purpose": "List indexed files for active chat"},
     {"Method": "POST", "Endpoint": "/query", "Purpose": "Retrieve context and generate answer"},
+    {"Method": "POST", "Endpoint": "/evaluate-ragas", "Purpose": "Run RAGAS validation on a query/response pair"},
+    {"Method": "GET", "Endpoint": "/evaluate-ragas/metrics", "Purpose": "List supported RAGAS validation metrics"},
     {"Method": "GET", "Endpoint": "/chat-history/{chat_id}", "Purpose": "Load saved conversation"},
     {"Method": "GET", "Endpoint": "/metrics", "Purpose": "Read telemetry counters"},
     {"Method": "GET", "Endpoint": "/users", "Purpose": "Admin-only user list"},
@@ -98,6 +105,7 @@ IC_UPLOAD = _icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polylin
 IC_GLOBE = _icon('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>')
 IC_DATABASE = _icon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>')
 IC_ZAP = _icon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>')
+IC_VALIDATE = _icon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')
 
 ROLE_STYLES = {
     "admin":   {"bg": "#FEF2F2", "fg": "#991B1B", "bd": "#FECACA"},
@@ -745,6 +753,22 @@ st.markdown(
         font-family: 'JetBrains Mono', monospace;
     }
 
+    .rag-context-block {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text-2);
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 0.78rem;
+        line-height: 1.55;
+        margin: 0.25rem 0 0.75rem 0;
+        max-height: 180px;
+        overflow: auto;
+        padding: 0.75rem 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 999px; }
@@ -1112,6 +1136,53 @@ def load_history(chat_id):
 
 def count_assistant_turns(history):
     return sum(1 for message in history if message.get("role") == "assistant")
+
+
+def ragas_turns(history):
+    turns = []
+    pending_query = None
+    for message in history:
+        role = message.get("role")
+        content = str(message.get("content", "") or "").strip()
+        if role == "user":
+            pending_query = content
+        elif role == "assistant" and pending_query and content:
+            turns.append({
+                "query": pending_query,
+                "answer": content,
+                "sources": message.get("sources") or [],
+                "telemetry": message.get("telemetry") or {},
+            })
+            pending_query = None
+    return turns
+
+
+def short_text(text, limit=80):
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def format_ragas_score(value):
+    if value is None:
+        return "Unavailable"
+    try:
+        return f"{float(value):.3f}"
+    except Exception:
+        return str(value)
+
+
+def render_compact_source(source):
+    safe_source = escape(str(source or ""))
+    st.markdown(
+        f"""
+        <div class="rag-context-block">
+            {safe_source}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def section_header(icon_html, label, count=None):
@@ -1683,7 +1754,7 @@ def render_history():
                             f'<div class="rag-source-num">{index}</div>',
                             unsafe_allow_html=True,
                         )
-                        st.write(source)
+                        render_compact_source(source)
                         if index < len(sources):
                             st.markdown("<hr style='margin: 0.5rem 0;'/>", unsafe_allow_html=True)
 
@@ -1771,6 +1842,159 @@ def query_panel(chat_id, files):
 # ============================================================
 # UI — Admin
 # ============================================================
+
+def render_ragas_validation(chat_id, files):
+    turns = ragas_turns(st.session_state.history)
+
+    with st.sidebar:
+        with st.expander("RAGAS validation", expanded=True):
+            if not turns:
+                st.caption("Ask a question first, then validate the received response here.")
+            else:
+                max_index = max(len(turns) - 1, 0)
+                try:
+                    st.session_state.ragas_selected_turn = int(st.session_state.ragas_selected_turn)
+                except (TypeError, ValueError):
+                    st.session_state.ragas_selected_turn = 0
+
+                if st.session_state.ragas_selected_turn > max_index:
+                    st.session_state.ragas_selected_turn = max_index
+                if st.session_state.ragas_selected_turn < 0:
+                    st.session_state.ragas_selected_turn = 0
+                labels = [
+                    f"{index + 1}. {short_text(turn['query'], 64)}"
+                    for index, turn in enumerate(turns)
+                ]
+                st.selectbox(
+                    "Asked query / received response",
+                    options=list(range(len(turns))),
+                    format_func=lambda index: labels[index],
+                    key="ragas_selected_turn",
+                )
+                st.caption("Pick a previous answer, then run retrieval validation in the main panel.")
+
+    st.markdown(
+        f'<div class="rag-section-title">{IC_VALIDATE}<span>RAGAS Validation</span>'
+        f'<span class="rag-subcount">RETRIEVAL CHECK</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(border=True):
+        if not files:
+            st.warning("Index a document before running RAGAS validation.")
+            return
+
+        if not turns:
+            st.info("No completed question/answer pairs are available yet.")
+            return
+
+        selected = turns[st.session_state.ragas_selected_turn]
+        if st.session_state.ragas_result_turn != st.session_state.ragas_selected_turn:
+            st.session_state.ragas_result = None
+        st.markdown("##### Selected Query")
+        st.write(selected["query"])
+        st.markdown("##### Received Response")
+        st.write(selected["answer"])
+
+        source_count = len(selected.get("sources") or [])
+        telemetry = selected.get("telemetry") or {}
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Saved Sources", source_count)
+        c2.metric("Saved Chunks", telemetry.get("retrieved_chunks", source_count))
+        c3.metric("Saved Relevance", telemetry.get("response_relevance", 0))
+
+        metric_options = [
+            "faithfulness",
+            "context_precision",
+            "answer_relevancy",
+            "context_recall",
+            "factual_correctness",
+        ]
+        selected_metrics = st.multiselect(
+            "RAGAS metrics",
+            metric_options,
+            default=["context_precision"],
+            help="context_recall and factual_correctness require a reference answer.",
+        )
+        st.caption(
+            "Start with context_precision for retrieval validation. "
+            "Faithfulness and answer_relevancy can take longer because they run extra judge calls."
+        )
+        reference = st.text_area(
+            "Reference answer",
+            placeholder="Optional expected answer for recall/correctness metrics",
+            height=90,
+        )
+
+        run_col, clear_col, _ = st.columns([1.2, 1, 2.8])
+        run_clicked = run_col.button(
+            "Run RAGAS",
+            type="primary",
+            disabled=not selected_metrics,
+            use_container_width=True,
+        )
+        if clear_col.button("Clear result", use_container_width=True):
+            st.session_state.ragas_result = None
+            st.rerun()
+
+        if run_clicked:
+            payload = {
+                "query": selected["query"],
+                "answer": selected["answer"],
+                "chat_id": chat_id,
+                "reference": reference.strip(),
+                "metrics": selected_metrics,
+            }
+            with st.spinner("Running RAGAS retrieval validation..."):
+                try:
+                    res = request("POST", "/evaluate-ragas", json=payload, timeout=240)
+                except requests.RequestException:
+                    st.error("RAGAS validation failed. Backend is not reachable.")
+                    return
+
+            if res.status_code == 200:
+                st.session_state.ragas_result = res.json()
+                st.session_state.ragas_result_turn = st.session_state.ragas_selected_turn
+                st.rerun()
+
+            st.error(f"RAGAS validation failed: {error_detail(res)}")
+
+        result = st.session_state.ragas_result
+        if result:
+            ragas_data = result.get("ragas", {})
+            scores = ragas_data.get("scores", {})
+            if scores:
+                st.markdown("##### Validation Scores")
+                score_cols = st.columns(min(len(scores), 4))
+                score_sources = ragas_data.get("score_sources", {})
+                for index, (name, value) in enumerate(scores.items()):
+                    source_label = score_sources.get(name, "ragas")
+                    label = name.replace("_", " ").title()
+                    if source_label == "local_fallback":
+                        label = f"{label} (Fallback)"
+                    score_cols[index % len(score_cols)].metric(
+                        label,
+                        format_ragas_score(value),
+                    )
+                if any(source == "local_fallback" for source in score_sources.values()):
+                    st.info(
+                        "Some RAGAS judge scores were unavailable, so the app used "
+                        "a local token-overlap fallback for those metrics."
+                    )
+            else:
+                st.info("RAGAS completed but did not return numeric scores.")
+
+            with st.expander("Retrieved contexts used for validation", expanded=False):
+                for index, source in enumerate(result.get("sources", []), start=1):
+                    st.markdown(
+                        f'<div class="rag-source-num">{index}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_compact_source(source)
+
+            with st.expander("Raw RAGAS payload", expanded=False):
+                st.json(result)
+
 
 def admin_panel():
     if st.session_state.role not in USER_MANAGEMENT_ROLES:
@@ -1960,8 +2184,19 @@ def chat_page():
     col2.metric("Messages", len(st.session_state.history))
     col3.metric("Answers", n_answers)
 
+    action_col, _ = st.columns([1.4, 4])
+    ragas_label = "Close RAGAS validation" if st.session_state.ragas_open else "Open RAGAS validation"
+    if action_col.button(ragas_label, type="primary", use_container_width=True):
+        st.session_state.ragas_open = not st.session_state.ragas_open
+        st.session_state.ragas_result = None
+        st.session_state.ragas_result_turn = None
+        st.rerun()
+
     upload_panel(chat_id)
     admin_panel()
+
+    if st.session_state.ragas_open:
+        render_ragas_validation(chat_id, files)
 
     st.markdown(
         f'<div class="rag-section-title">{IC_MSG}<span>Conversation</span>'

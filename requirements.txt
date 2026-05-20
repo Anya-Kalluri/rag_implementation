@@ -30,3 +30,4 @@ openpyxl
 xlrd
 redis
 rapidocr-onnxruntime
+ragas==0.4.3
